@@ -734,6 +734,28 @@ function ConfirmModal({ message, subMessage, onConfirm, onClose, theme, dangerou
   );
 }
 
+async function getAlbumCover(artist, album) {
+  try {
+    const q = encodeURIComponent(`${artist} ${album}`);
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${q}&entity=album&limit=1`
+    );
+
+    const data = await res.json();
+
+    if (data.results?.length) {
+      return data.results[0].artworkUrl100.replace(
+        "100x100bb",
+        "600x600bb"
+      );
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  return null;
+}
+
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 export default function App() {
   const [settings, setSettings] = useState(() => loadLS(SK.settings, {
@@ -881,12 +903,25 @@ useEffect(() => {
     }
   };
 
-  const handleAdd = (form, source) => {
-    const entry = { ...form, id:uid(), year:parseInt(form.year)||new Date().getFullYear() };
-    if (source === "want") setWant(prev => [...prev, { ...entry, done:false }]);
-    else setListened(prev => [...prev, { ...entry, rating:null }]);
-    setAddModal(null);
+  const handleAdd = async (form, source) => {
+  const cover = await getAlbumCover(form.artist, form.album);
+  console.log("COVER URL:", cover);
+
+  const entry = {
+    ...form,
+    id: uid(),
+    year: parseInt(form.year) || new Date().getFullYear(),
+    cover,
   };
+
+  if (source === "want") {
+    setWant(prev => [...prev, { ...entry, done: false }]);
+  } else {
+    setListened(prev => [...prev, { ...entry, rating: null }]);
+  }
+
+  setAddModal(null);
+};
 
   const handleEdit = (form, source, id) => {
     if (source === "want") setWant(prev => prev.map(a => a.id===id ? {...a,...form,year:parseInt(form.year)} : a));
@@ -1099,50 +1134,163 @@ alert("Cloud data loaded!");
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
             }}>+ Add album</button>
             {visibleWant.map(a => {
-              const c = GENRES[a.genre]?.color || "#888";
-              const albumPrefix = `${a.artist}||${a.album}||`;
-              const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
-              return (
-                <div key={a.id} style={{
-                  display:"flex", alignItems:"center", gap:9, padding:pad,
-                  background: a.done ? theme.surface : theme.card,
-                  borderRadius:9, border: a.start&&!a.done ? `1px solid ${c}55` : `1px solid ${theme.border}`,
-                  opacity: a.done ? 0.4 : 1, transition:"opacity .2s",
-                }}>
-                  <div onClick={() => toggleWantDone(a.id)} style={{
-                    width:19, height:19, borderRadius:"50%", flexShrink:0, cursor:"pointer",
-                    border:`2px solid ${a.done ? c : theme.border}`, background: a.done ? c : "transparent",
-                    display:"flex", alignItems:"center", justifyContent:"center", transition:"all .2s",
-                  }}>
-                    {a.done && <span style={{ color:"#000", fontSize:10, fontWeight:800 }}>✓</span>}
-                  </div>
-                  <div onClick={() => setDetailAlbum(a)} style={{ flex:1, minWidth:0, cursor:"pointer" }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-                      <span style={{ fontSize:13, fontWeight:600, color: a.done?theme.muted:theme.text,
-                        textDecoration: a.done?"line-through":"none" }}>{a.album}</span>
-                      {a.start && !a.done && <span style={{ fontSize:9, padding:"1px 5px", borderRadius:5,
-                        background:c+"30", color:c, fontWeight:800 }}>START HERE</span>}
-                    </div>
-                    {!compact && <div style={{ fontSize:11, color:theme.muted, marginTop:1 }}>
-                      {a.artist} · {a.year}{a.note ? ` · ${a.note}` : ""}
-                    </div>}
-                  </div>
-                  {hasAlbumNotes && (
-                    <span title="Has song notes" style={{ fontSize:12, flexShrink:0 }}>✍️</span>
-                  )}
-                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8,
-                    background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
-                    {GENRES[a.genre]?.label}
-                  </div>
-                  <button onClick={() => setEditModal({album:a, source:"want"})} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 2px" }}>✏️</button>
-                  <button onClick={() => requestDelete(a, "want")} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 2px" }}>🗑️</button>
-                </div>
-              );
-            })}
+  const c = GENRES[a.genre]?.color || "#888";
+  const albumPrefix = `${a.artist}||${a.album}||`;
+  const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
+
+  return (
+    <div key={a.id} style={{
+      display:"flex",
+      alignItems:"center",
+      gap:9,
+      padding:pad,
+      background: a.done ? theme.surface : theme.card,
+      borderRadius:9,
+      border: a.start && !a.done
+        ? `1px solid ${c}55`
+        : `1px solid ${theme.border}`,
+      opacity: a.done ? 0.4 : 1,
+      transition:"opacity .2s",
+    }}>
+
+      {a.cover && (
+        <img
+          src={a.cover}
+          alt={a.album}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 8,
+            objectFit: "cover",
+            flexShrink: 0,
+          }}
+        />
+      )}
+
+      <div onClick={() => toggleWantDone(a.id)} style={{
+        width:19,
+        height:19,
+        borderRadius:"50%",
+        flexShrink:0,
+        cursor:"pointer",
+        border:`2px solid ${a.done ? c : theme.border}`,
+        background: a.done ? c : "transparent",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        transition:"all .2s",
+      }}>
+        {a.done && (
+          <span style={{
+            color:"#000",
+            fontSize:10,
+            fontWeight:800
+          }}>
+            ✓
+          </span>
+        )}
+      </div>
+
+      <div
+        onClick={() => setDetailAlbum(a)}
+        style={{ flex:1, minWidth:0, cursor:"pointer" }}
+      >
+        <div style={{
+          display:"flex",
+          alignItems:"center",
+          gap:5,
+          flexWrap:"wrap"
+        }}>
+          <span style={{
+            fontSize:13,
+            fontWeight:600,
+            color: a.done ? theme.muted : theme.text,
+            textDecoration: a.done ? "line-through" : "none"
+          }}>
+            {a.album}
+          </span>
+
+          {a.start && !a.done && (
+            <span style={{
+              fontSize:9,
+              padding:"1px 5px",
+              borderRadius:5,
+              background:c+"30",
+              color:c,
+              fontWeight:800
+            }}>
+              START HERE
+            </span>
+          )}
+        </div>
+
+        {!compact && (
+          <div style={{
+            fontSize:11,
+            color:theme.muted,
+            marginTop:1
+          }}>
+            {a.artist} · {a.year}
+            {a.note ? ` · ${a.note}` : ""}
+          </div>
+        )}
+      </div>
+
+      {hasAlbumNotes && (
+        <span title="Has song notes" style={{
+          fontSize:12,
+          flexShrink:0
+        }}>
+          ✍️
+        </span>
+      )}
+
+      <div style={{
+        fontSize:10,
+        padding:"2px 7px",
+        borderRadius:8,
+        background:c+"18",
+        color:c,
+        border:`1px solid ${c}30`,
+        flexShrink:0
+      }}>
+        {GENRES[a.genre]?.label}
+      </div>
+
+      <button
+        onClick={() => setEditModal({album:a, source:"want"})}
+        style={{
+          background:"none",
+          border:"none",
+          color:theme.muted,
+          cursor:"pointer",
+          fontSize:13,
+          padding:"0 2px"
+        }}
+      >
+        ✏️
+      </button>
+
+      <button
+        onClick={() => requestDelete(a, "want")}
+        style={{
+          background:"none",
+          border:"none",
+          color:theme.muted,
+          cursor:"pointer",
+          fontSize:13,
+          padding:"0 2px"
+        }}
+      >
+        🗑️
+      </button>
+
+    </div>
+  );
+})}
           </div>
         </>
       )}
-
       {/* ══ RATED & RANKED ═══════════════════════════════════════════════════ */}
       {tab === "heard" && (
         <>
@@ -1163,67 +1311,185 @@ alert("Cloud data loaded!");
               Tap a rating to edit · tap title for tracklist
               {settings.listenSort==="rating" && " · ▲▼ reorders ties"}
             </p>
-            {visibleListened.map((a, i) => {
-              const c = GENRES[a.genre]?.color || "#888";
-              const rc = ratingColor(a.rating);
-              const isEditing = editRatingId === a.id;
-              const prev = visibleListened[i-1];
-              const next = visibleListened[i+1];
-              const canUp   = settings.listenSort==="rating" && a.rating!=null && prev && prev.rating === a.rating;
-              const canDown = settings.listenSort==="rating" && a.rating!=null && next && next.rating === a.rating;
-              const albumPrefix = `${a.artist}||${a.album}||`;
-              const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
-              return (
-                <div key={a.id} style={{
-                  display:"flex", alignItems:"center", gap:8, padding:pad,
-                  background:theme.card, borderRadius:9, border:`1px solid ${theme.border}`,
-                }}>
-                  <div style={{ width:22, textAlign:"right", fontSize:11, color:a.rating!=null?theme.muted:theme.border, flexShrink:0, fontWeight:700 }}>
-                    {settings.listenSort==="rating" && a.rating!=null ? i+1 : "—"}
-                  </div>
-                  <ReorderArrows canUp={canUp} canDown={canDown}
-                    onUp={() => moveAlbumInTieGroup(a, -1)}
-                    onDown={() => moveAlbumInTieGroup(a, 1)}
-                    theme={theme} />
-                  <div onClick={() => setDetailAlbum(a)} style={{ flex:1, minWidth:0, cursor:"pointer" }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{a.album}</div>
-                    {!compact && <div style={{ fontSize:11, color:theme.muted, marginTop:1 }}>{a.artist} · {a.year}</div>}
-                  </div>
-                  {hasAlbumNotes && (
-                    <span title="Has song notes" style={{ fontSize:12, flexShrink:0 }}>✍️</span>
-                  )}
-                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
-                    {GENRES[a.genre]?.label}
-                  </div>
-                  {isEditing ? (
-                    <input autoFocus value={editRatingVal}
-                      onChange={e => setEditRatingVal(e.target.value)}
-                      onBlur={() => commitRating(a.id)}
-                      onKeyDown={e => { if(e.key==="Enter") commitRating(a.id); if(e.key==="Escape") setEditRatingId(null); }}
-                      placeholder="0–10"
-                      style={{ width:50, padding:"4px 5px", borderRadius:6, border:`1px solid ${rc}`,
-                        background:theme.bg, color:theme.text, fontSize:13, fontWeight:700, textAlign:"center", outline:"none" }}
-                    />
-                  ) : (
-                    <div onClick={() => { setEditRatingId(a.id); setEditRatingVal(a.rating!=null?String(a.rating):""); }} style={{
-                      minWidth:42, padding:"4px 7px", borderRadius:6, cursor:"pointer",
-                      background: a.rating!=null ? rc+"22" : theme.surface,
-                      border:`1px solid ${a.rating!=null ? rc+"55" : theme.border}`,
-                      color: a.rating!=null ? rc : theme.muted, fontSize:13, fontWeight:800,
-                      textAlign:"center", flexShrink:0,
-                    }}>
-                      {a.rating!=null ? a.rating.toFixed(1) : "+"}
-                    </div>
-                  )}
-                  <button onClick={() => setEditModal({album:a, source:"listened"})} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 2px" }}>✏️</button>
-                  <button onClick={() => requestDelete(a, "listened")} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 2px" }}>🗑️</button>
-                </div>
-              );
-            })}
+           {visibleListened.map((a, i) => {
+  const c = GENRES[a.genre]?.color || "#888";
+  const rc = ratingColor(a.rating);
+  const isEditing = editRatingId === a.id;
+  const prev = visibleListened[i-1];
+  const next = visibleListened[i+1];
+  const canUp   = settings.listenSort==="rating" && a.rating!=null && prev && prev.rating === a.rating;
+  const canDown = settings.listenSort==="rating" && a.rating!=null && next && next.rating === a.rating;
+  const albumPrefix = `${a.artist}||${a.album}||`;
+  const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
+
+  return (
+    <div key={a.id} style={{
+      display:"flex",
+      alignItems:"center",
+      gap:8,
+      padding:pad,
+      background:theme.card,
+      borderRadius:9,
+      border:`1px solid ${theme.border}`,
+    }}>
+      <div style={{
+        width:22,
+        textAlign:"right",
+        fontSize:11,
+        color:a.rating!=null ? theme.muted : theme.border,
+        flexShrink:0,
+        fontWeight:700
+      }}>
+        {settings.listenSort==="rating" && a.rating!=null ? i+1 : "—"}
+      </div>
+
+      <ReorderArrows
+        canUp={canUp}
+        canDown={canDown}
+        onUp={() => moveAlbumInTieGroup(a, -1)}
+        onDown={() => moveAlbumInTieGroup(a, 1)}
+        theme={theme}
+      />
+
+      {a.cover && (
+        <img
+          src={a.cover}
+          alt={a.album}
+          style={{
+            width:48,
+            height:48,
+            borderRadius:8,
+            objectFit:"cover",
+            flexShrink:0,
+          }}
+        />
+      )}
+
+      <div
+        onClick={() => setDetailAlbum(a)}
+        style={{ flex:1, minWidth:0, cursor:"pointer" }}
+      >
+        <div style={{
+          fontSize:13,
+          fontWeight:600,
+          color:theme.text
+        }}>
+          {a.album}
+        </div>
+
+        {!compact && (
+          <div style={{
+            fontSize:11,
+            color:theme.muted,
+            marginTop:1
+          }}>
+            {a.artist} · {a.year}
+          </div>
+        )}
+      </div>
+
+      {hasAlbumNotes && (
+        <span title="Has song notes" style={{
+          fontSize:12,
+          flexShrink:0
+        }}>
+          ✍️
+        </span>
+      )}
+
+      <div style={{
+        fontSize:10,
+        padding:"2px 7px",
+        borderRadius:8,
+        background:c+"18",
+        color:c,
+        border:`1px solid ${c}30`,
+        flexShrink:0
+      }}>
+        {GENRES[a.genre]?.label}
+      </div>
+
+      {isEditing ? (
+        <input
+          autoFocus
+          value={editRatingVal}
+          onChange={e => setEditRatingVal(e.target.value)}
+          onBlur={() => commitRating(a.id)}
+          onKeyDown={e => {
+            if (e.key === "Enter") commitRating(a.id);
+            if (e.key === "Escape") setEditRatingId(null);
+          }}
+          placeholder="0–10"
+          style={{
+            width:50,
+            padding:"4px 5px",
+            borderRadius:6,
+            border:`1px solid ${rc}`,
+            background:theme.bg,
+            color:theme.text,
+            fontSize:13,
+            fontWeight:700,
+            textAlign:"center",
+            outline:"none"
+          }}
+        />
+      ) : (
+        <div
+          onClick={() => {
+            setEditRatingId(a.id);
+            setEditRatingVal(a.rating!=null ? String(a.rating) : "");
+          }}
+          style={{
+            minWidth:42,
+            padding:"4px 7px",
+            borderRadius:6,
+            cursor:"pointer",
+            background:a.rating!=null ? rc+"22" : theme.surface,
+            border:`1px solid ${a.rating!=null ? rc+"55" : theme.border}`,
+            color:a.rating!=null ? rc : theme.muted,
+            fontSize:13,
+            fontWeight:800,
+            textAlign:"center",
+            flexShrink:0,
+          }}
+        >
+          {a.rating!=null ? a.rating.toFixed(1) : "+"}
+        </div>
+      )}
+
+      <button
+        onClick={() => setEditModal({album:a, source:"listened"})}
+        style={{
+          background:"none",
+          border:"none",
+          color:theme.muted,
+          cursor:"pointer",
+          fontSize:13,
+          padding:"0 2px"
+        }}
+      >
+        ✏️
+      </button>
+
+      <button
+        onClick={() => requestDelete(a, "listened")}
+        style={{
+          background:"none",
+          border:"none",
+          color:theme.muted,
+          cursor:"pointer",
+          fontSize:13,
+          padding:"0 2px"
+        }}
+      >
+        🗑️
+      </button>
+    </div>
+  );
+})}
           </div>
         </>
       )}
-
       {/* ══ TOP 50 SONGS ═════════════════════════════════════════════════════ */}
       {tab === "top50" && (
         <div style={{ padding:"16px 18px" }}>
@@ -1260,10 +1526,32 @@ alert("Cloud data loaded!");
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
                   </div>
                   <ReorderArrows canUp={canUp} canDown={canDown}
-                    onUp={() => moveSongInTieGroup(s, -1)}
-                    onDown={() => moveSongInTieGroup(s, 1)}
-                    theme={theme} />
-                  <div onClick={() => setDetailSong(s)} style={{ flex:1, minWidth:0, cursor:"pointer", display:"flex", alignItems:"center", gap:6 }}>
+  onUp={() => moveSongInTieGroup(s, -1)}
+  onDown={() => moveSongInTieGroup(s, 1)}
+  theme={theme} />
+
+{albumObj?.cover && (
+  <img
+    src={albumObj.cover}
+    alt={s.album}
+    style={{
+      width:48,
+      height:48,
+      borderRadius:8,
+      objectFit:"cover",
+      flexShrink:0,
+    }}
+  />
+)}
+
+<div onClick={() => setDetailSong(s)} style={{
+  flex:1,
+  minWidth:0,
+  cursor:"pointer",
+  display:"flex",
+  alignItems:"center",
+  gap:6
+}}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{s.song}</div>
                       <div style={{ fontSize:11, color:theme.muted, marginTop:1 }}>{s.artist} · {s.album}</div>
