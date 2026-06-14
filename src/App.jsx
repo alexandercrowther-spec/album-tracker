@@ -2,18 +2,39 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
-  hiphop:     { label: "Hip-Hop",           color: "#f87171" },
-  rap:        { label: "Rap",               color: "#fb923c" },
-  alternative:{ label: "Alternative Rock",  color: "#a78bfa" },
-  indie:      { label: "Indie Rock",        color: "#c084fc" },
-  rock:       { label: "Classic Rock",      color: "#60a5fa" },
-  pop:        { label: "Pop",               color: "#f9a8d4" },
-  jazz:       { label: "Jazz / Soul",       color: "#fbbf24" },
-  folk:       { label: "Folk / Singer-Songwriter", color: "#34d399" },
-  electronic: { label: "Electronic",        color: "#38bdf8" },
-  rnb:        { label: "R&B / Soul",        color: "#f472b6" },
-  country:    { label: "Country / Americana", color: "#a3e635" },
-  classical:  { label: "Classical",         color: "#94a3b8" },
+hiphop:      { label: "Hip-Hop", color: "#f87171" },
+  rap:         { label: "Rap", color: "#fb923c" },
+
+  alternative: { label: "Alternative Rock", color: "#a78bfa" },
+  indie:       { label: "Indie Rock", color: "#c084fc" },
+  rock:        { label: "Classic Rock", color: "#60a5fa" },
+  psychrock:   { label: "Psychedelic Rock", color: "#8b5cf6" },
+  progrock:    { label: "Progressive Rock", color: "#6366f1" },
+  jazzrock:    { label: "Jazz Rock", color: "#3b82f6" },
+  punk:        { label: "Punk", color: "#ef4444" },
+  metal:       { label: "Metal", color: "#9ca3af" },
+
+  pop:         { label: "Pop", color: "#f9a8d4" },
+  synthpop:    { label: "Synth-Pop", color: "#ec4899" },
+
+  jazz:        { label: "Jazz", color: "#fbbf24" },
+  soul:        { label: "Soul", color: "#f59e0b" },
+  rnb:         { label: "R&B", color: "#f472b6" },
+  funk:        { label: "Funk / Disco", color: "#eab308" },
+
+  folk:        { label: "Folk", color: "#34d399" },
+  singersongwriter: { label: "Singer-Songwriter", color: "#22c55e" },
+  country:     { label: "Country", color: "#a3e635" },
+  americana:   { label: "Americana", color: "#84cc16" },
+
+  electronic:  { label: "Electronic", color: "#38bdf8" },
+  ambient:     { label: "Ambient", color: "#06b6d4" },
+
+  classical:   { label: "Classical", color: "#94a3b8" },
+
+  soundtrack:  { label: "Soundtrack / Score", color: "#818cf8" },
+
+  other:       { label: "Other", color: "#6b7280" },
 };
 const GENRE_KEYS = Object.keys(GENRES);
 
@@ -153,21 +174,7 @@ function mergeWithSeed(seed, saved, deletedIds) {
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-// ─── FETCH TRACKLIST ─────────────────────────────────────────────────────────
-async function fetchTracklist(artist, album) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-6", max_tokens: 1000,
-      messages: [{ role: "user", content: `List every track on the album "${album}" by ${artist} in order. Reply with ONLY a valid JSON array of strings, no markdown, no commentary. Example: ["Track One","Track Two"]` }]
-    })
-  });
-  const data = await res.json();
-  const text = (data.content || []).map(b => b.text || "").join("");
-  const clean = text.replace(/```[a-z]*\n?|```/g, "").trim();
-  return JSON.parse(clean);
-}
+
 
 // ─── COLOUR HELPERS ───────────────────────────────────────────────────────────
 const ratingColor = r => {
@@ -467,16 +474,14 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
   const [editTracks, setEditTracks] = useState(null);
 
   useEffect(() => {
-    if (tracks) { setLoading(false); return; }
-    fetchTracklist(album.artist, album.album)
-      .then(list => {
-        const next = { ...trackCache, [cacheKey]: list };
-        setTrackCache(next);
-        persist(SK.tracks, next);
-        setLoading(false);
-      })
-      .catch(() => { setError("Couldn't load tracklist. You can add tracks manually."); setLoading(false); });
-  }, []);
+  if (!tracks) {
+    const next = { ...trackCache, [cacheKey]: [] };
+    setTrackCache(next);
+    persist(SK.tracks, next);
+  }
+
+  setLoading(false);
+}, []);
 
   const noteKey = s => `${cacheKey}||${s}`;
   const ratingKey = s => `${cacheKey}||${s}`;
