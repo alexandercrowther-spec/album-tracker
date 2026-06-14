@@ -897,6 +897,97 @@ export default function App() {
       <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"16px 18px 0" }}>
         <div style={{ display:"flex", alignItems:"center", marginBottom:12 }}>
           <h1 style={{ margin:0, fontSize:18, fontWeight:800, color:theme.text, letterSpacing:"-0.3px", flex:1 }}>🎧 My Albums</h1>
+          <button
+  onClick={async () => {
+  const payload = {
+    want,
+    listened,
+    trackCache,
+    notes,
+    songRatings,
+    settings,
+    albumOrder,
+    songOrder,
+    deletedWant,
+    deletedListened,
+  };
+
+  const { error } = await supabase
+    .from("app_data")
+    .update({ data: payload })
+    .eq("id", 8);
+
+  if (error) {
+    alert("Cloud save failed");
+    console.error(error);
+  } else {
+    alert("Cloud save successful!");
+  }
+}}
+
+  style={{
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
+    color: theme.muted,
+    borderRadius: 8,
+    padding: "5px 10px",
+    cursor: "pointer",
+    fontSize: 12,
+    marginRight: 8,
+  }}
+>
+  ☁ Save
+  
+</button>
+<button
+  onClick={async () => {
+    const { data, error } = await supabase
+      .from("app_data")
+      .select("data")
+      .eq("id", 8)
+      .single();
+
+    if (error) {
+      alert("Cloud load failed");
+      console.error(error);
+      return;
+    }
+
+const cloud = data.data;
+
+console.log("CLOUD WANT LENGTH:", cloud.want.length);
+console.log("LOCAL WANT LENGTH:", want.length);
+
+setWant(cloud.want || []);
+console.log("AFTER SET WANT");
+setListened(cloud.listened || []);
+setTrackCache(cloud.trackCache || {});
+setNotes(cloud.notes || {});
+setSongRatings(cloud.songRatings || {});
+setSettings(cloud.settings || settings);
+setAlbumOrder(cloud.albumOrder || []);
+setSongOrder(cloud.songOrder || []);
+setDeletedWant(cloud.deletedWant || []);
+setDeletedListened(cloud.deletedListened || []);
+
+setTab("heard");
+setTimeout(() => setTab("want"), 100);
+
+alert("Cloud data loaded!");
+  }}
+  style={{
+    background: theme.card,
+    border: `1px solid ${theme.border}`,
+    color: theme.muted,
+    borderRadius: 8,
+    padding: "5px 10px",
+    cursor: "pointer",
+    fontSize: 12,
+    marginRight: 8,
+  }}
+>
+  ☁ Load
+</button>
           <button onClick={() => setShowSettings(true)} style={{
             background:theme.card, border:`1px solid ${theme.border}`, color:theme.muted,
             borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12,
