@@ -295,7 +295,7 @@ function ReorderArrows({ canUp, canDown, onUp, onDown, theme }) {
 
 // ─── ALBUM FORM ──────────────────────────────────────────────────────────────
 function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
-  const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop" });
+  const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop", cover:"" });
   const set = (k, v) => setForm(p => ({...p, [k]: v}));
   return (
     <Modal onClose={onClose} theme={theme}>
@@ -312,13 +312,26 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
           />
         </div>
       ))}
-      <div style={{ marginBottom:18 }}>
+      <div style={{ marginBottom:12 }}>
         <div style={{ fontSize:11, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
             borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none" }}>
           {GENRE_KEYS.map(g => <option key={g} value={g}>{GENRES[g].label}</option>)}
         </select>
+      </div>
+
+      <div style={{ marginBottom:18 }}>
+        <div style={{ fontSize:11, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
+        <input
+          type="text"
+          value={form.cover || ""}
+          onChange={e => set("cover", e.target.value)}
+          placeholder="https://..."
+          style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13,
+            outline:"none", boxSizing:"border-box" }}
+        />
       </div>
       <button onClick={() => { if (form.artist && form.album) onSave(form); }}
         style={{ width:"100%", padding:"10px", background:theme.accent, border:"none",
@@ -904,7 +917,7 @@ useEffect(() => {
   };
 
   const handleAdd = async (form, source) => {
-  const cover = await getAlbumCover(form.artist, form.album);
+  const cover = form.cover?.trim() ? form.cover.trim() : await getAlbumCover(form.artist, form.album);
   console.log("COVER URL:", cover);
 
   const entry = {
