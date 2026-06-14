@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-
+import { supabase } from "./supabase";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
   hiphop:     { label: "Hip-Hop",           color: "#f87171" },
@@ -16,6 +16,7 @@ const GENRES = {
   classical:  { label: "Classical",         color: "#94a3b8" },
 };
 const GENRE_KEYS = Object.keys(GENRES);
+
 
 // ─── SEED DATA ────────────────────────────────────────────────────────────────
 const SEED_LISTENED = [
@@ -768,6 +769,7 @@ export default function App() {
   useEffect(() => { persist(SK.songOrder, songOrder); }, [songOrder]);
   useEffect(() => { persist(SK.deletedWant,     deletedWant);     }, [deletedWant]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
+
 
   // ── helpers to check if an album has any song data ──────────────────────
   const albumHasData = (album) => {
