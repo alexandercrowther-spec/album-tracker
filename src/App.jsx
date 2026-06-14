@@ -770,6 +770,72 @@ export default function App() {
   useEffect(() => { persist(SK.deletedWant,     deletedWant);     }, [deletedWant]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
 
+useEffect(() => {
+  async function autoLoad() {
+    const { data, error } = await supabase
+      .from("app_data")
+      .select("data")
+      .eq("id", 8)
+      .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const cloud = data.data;
+
+    setWant(cloud.want || []);
+    setListened(cloud.listened || []);
+    setTrackCache(cloud.trackCache || {});
+    setNotes(cloud.notes || {});
+    setSongRatings(cloud.songRatings || {});
+    setSettings(cloud.settings || settings);
+    setAlbumOrder(cloud.albumOrder || []);
+    setSongOrder(cloud.songOrder || []);
+    setDeletedWant(cloud.deletedWant || []);
+    setDeletedListened(cloud.deletedListened || []);
+  }
+
+  autoLoad();
+}, []);
+
+useEffect(() => {
+  const timer = setTimeout(async () => {
+    const payload = {
+      want,
+      listened,
+      trackCache,
+      notes,
+      songRatings,
+      settings,
+      albumOrder,
+      songOrder,
+      deletedWant,
+      deletedListened,
+    };
+
+    await supabase
+      .from("app_data")
+      .update({ data: payload })
+      .eq("id", 8);
+
+    console.log("Auto-saved to cloud");
+  }, 2000);
+
+  return () => clearTimeout(timer);
+}, [
+  want,
+  listened,
+  trackCache,
+  notes,
+  songRatings,
+  settings,
+  albumOrder,
+  songOrder,
+  deletedWant,
+  deletedListened,
+]);
 
   // ── helpers to check if an album has any song data ──────────────────────
   const albumHasData = (album) => {
