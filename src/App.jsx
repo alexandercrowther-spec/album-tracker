@@ -34,7 +34,31 @@ hiphop:      { label: "Hip-Hop", color: "#f87171" },
 
   soundtrack:  { label: "Soundtrack / Score", color: "#818cf8" },
 
-  other:       { label: "Other", color: "#6b7280" },
+  britpop:{ label:"Britpop", color:"#f59e0b"},
+poprock:{ label:"Pop Rock", color:"#ec4899"},
+shoegaze:{ label:"Shoegaze", color:"#8b5cf6"},
+dreampop:{ label:"Dream Pop", color:"#a855f7"},
+postpunk:{ label:"Post-Punk", color:"#6366f1"},
+newwave:{ label:"New Wave", color:"#06b6d4"},
+grunge:{ label:"Grunge", color:"#78716c"},
+artrock:{ label:"Art Rock", color:"#3b82f6"},
+triphop:{ label:"Trip Hop", color:"#14b8a6"},
+synthpop:{ label:"Synth Pop", color:"#0ea5e9"},
+progressiverock:{ label:"Progressive Rock", color:"#2563eb"},
+hardrock:{ label:"Hard Rock", color:"#dc2626"},
+metal:{ label:"Metal", color:"#991b1b"},
+punk:{ label:"Punk", color:"#f97316"},
+other:       { label: "Other", color: "#6b7280" },
+
+indiepop:{ label:"Indie Pop", color:"#f472b6"},
+chamberpop:{ label:"Chamber Pop", color:"#fb7185"},
+folkrock:{ label:"Folk Rock", color:"#22c55e"},
+garagerock:{ label:"Garage Rock", color:"#ef4444"},
+neosoul:{ label:"Neo Soul", color:"#f59e0b"},
+boombap:{ label:"Boom Bap", color:"#f97316"},
+house:{ label:"House", color:"#06b6d4"},
+techno:{ label:"Techno", color:"#0891b2"},
+
 };
 const GENRE_KEYS = Object.keys(GENRES);
 
@@ -148,6 +172,18 @@ const THEMES = {
     label: "Vapor", bg: "#07050f", surface: "#100d1f", card: "#161228",
     border: "#221a3a", text: "#e8e0ff", muted: "#5a4a7a", accent: "#f472b6",
   },
+  ocean: {
+    label: "Ocean", bg: "#07131c", surface: "#0d1d29", card: "#132738",
+    border: "#1f3d57", text: "#dbeafe", muted: "#5b7c99", accent: "#38bdf8",
+  },
+  emerald: {
+    label: "Emerald", bg: "#08120d", surface: "#0f1b14", card: "#14241b",
+    border: "#1f3a2b", text: "#dcfce7", muted: "#5f8a70", accent: "#10b981",
+  },
+  sunset: {
+    label: "Sunset", bg: "#1a0d08", surface: "#24120c", card: "#311810",
+    border: "#4a2418", text: "#ffedd5", muted: "#b07a5b", accent: "#fb923c",
+  },
 };
 const THEME_KEYS = Object.keys(THEMES);
 
@@ -236,7 +272,7 @@ function Modal({ onClose, children, theme, wide }) {
     }}>
       <div onClick={e => e.stopPropagation()} style={{
         background: theme.surface, border:`1px solid ${theme.border}`,
-        borderRadius:14, width:"100%", maxWidth: wide ? 760 : 560,
+        borderRadius:14, width:"100%", maxWidth: wide ? 1400 : 1000,
         maxHeight:"100%", display:"flex", flexDirection:"column",
         position:"relative", boxSizing:"border-box",
       }}>
@@ -304,7 +340,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
       </h2>
       {[["Artist","artist","text"],["Album title","album","text"],["Year","year","number"]].map(([label,key,type]) => (
         <div key={key} style={{ marginBottom:12 }}>
-          <div style={{ fontSize:11, color:theme.muted, marginBottom:4 }}>{label}</div>
+          <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>{label}</div>
           <input type={type} value={form[key]}
             onChange={e => set(key, type==="number" ? parseInt(e.target.value)||"" : e.target.value)}
             style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
@@ -313,7 +349,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
         </div>
       ))}
       <div style={{ marginBottom:12 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:4 }}>Genre</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
             borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none" }}>
@@ -322,7 +358,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
       </div>
 
       <div style={{ marginBottom:18 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
         <input
           type="text"
           value={form.cover || ""}
@@ -365,7 +401,7 @@ function SongRatingInput({ value, onChange, theme }) {
           background:theme.card, color:theme.text, fontSize:16, fontWeight:700,
           textAlign:"center", outline:"none" }}
       />
-      <span style={{ fontSize:11, color:theme.muted }}>e.g. 8.5 · press Enter</span>
+      <span style={{ fontSize:13, color:theme.muted }}>e.g. 8.5 · press Enter</span>
     </div>
   );
 
@@ -464,13 +500,13 @@ function SongDetailModal({ song, notes, setNotes, songRatings, setSongRatings, t
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
-      <div style={{ fontSize:11, color:theme.muted, marginBottom:2 }}>{song.artist} · {song.album}</div>
+      <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>{song.artist} · {song.album}</div>
       <h2 style={{ margin:"0 0 14px", fontSize:17, color:theme.text, fontWeight:800 }}>{song.song}</h2>
       <div style={{ marginBottom:18 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:6 }}>Your rating</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
         <SongRatingInput value={songRatings[noteKey]} onChange={setRating} theme={theme} />
       </div>
-      <div style={{ fontSize:11, color:theme.muted, marginBottom:6 }}>Notes</div>
+      <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Notes</div>
       <NoteSection value={notes[noteKey] || ""} onChange={setNote} theme={theme} />
     </Modal>
   );
@@ -549,11 +585,11 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
             ← back without saving
           </button>
           <h3 style={{ margin:"0 0 2px", color:theme.text, fontSize:15 }}>Edit tracklist</h3>
-          <p style={{ margin:"0 0 12px", fontSize:11, color:theme.muted }}>{album.album} · {editTracks.length} track{editTracks.length !== 1 ? "s" : ""}</p>
+          <p style={{ margin:"0 0 12px", fontSize:13, color:theme.muted }}>{album.album} · {editTracks.length} track{editTracks.length !== 1 ? "s" : ""}</p>
           <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:400, overflowY:"auto", paddingRight:2 }}>
             {editTracks.map((t, i) => (
               <div key={t.id} style={{ display:"flex", alignItems:"center", gap:7 }}>
-                <span style={{ fontSize:11, color:theme.muted, width:22, textAlign:"right", flexShrink:0 }}>{i + 1}</span>
+                <span style={{ fontSize:13, color:theme.muted, width:22, textAlign:"right", flexShrink:0 }}>{i + 1}</span>
                 <input value={t.val} onChange={e => etSet(t.id, e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); etAdd(); } }}
                   placeholder={`Track ${i + 1}`}
@@ -592,13 +628,14 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
           <button onClick={() => setView("tracks")} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 12px", display:"flex", alignItems:"center", gap:4 }}>
             ← back
           </button>
-          <div style={{ fontSize:11, color:theme.muted, marginBottom:2 }}>{album.album}</div>
+          <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>{album.album}</div>
           <h2 style={{ margin:"0 0 14px", fontSize:17, color:theme.text, fontWeight:800 }}>{activeSong}</h2>
+          {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:180,maxWidth:"100%",borderRadius:10}} /></div>}
           <div style={{ marginBottom:18 }}>
-            <div style={{ fontSize:11, color:theme.muted, marginBottom:6 }}>Your rating</div>
+            <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
             <SongRatingInput value={songRatings[ratingKey(activeSong)]} onChange={val => setSongRating(activeSong, val)} theme={theme} />
           </div>
-          <div style={{ fontSize:11, color:theme.muted, marginBottom:6 }}>Notes</div>
+          <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Notes</div>
           <NoteSection value={notes[noteKey(activeSong)] || ""} onChange={val => setSongNote(activeSong, val)} theme={theme} />
         </>
       )}
@@ -608,6 +645,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
           <div style={{ fontSize:11, color:c, fontWeight:700, marginBottom:4 }}>{GENRES[album.genre]?.label}</div>
           <h2 style={{ margin:"0 0 2px", fontSize:18, color:theme.text, fontWeight:800 }}>{album.album}</h2>
           <div style={{ fontSize:12, color:theme.muted, marginBottom:14 }}>{album.artist} · {album.year}</div>
+          {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
           {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
@@ -628,7 +666,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
                     background:theme.card, borderRadius:8, cursor:"pointer",
                     border: hasNote || sr != null ? `1px solid ${c}40` : `1px solid ${theme.border}`,
                   }}>
-                    <span style={{ fontSize:11, color:theme.muted, width:20, textAlign:"right", flexShrink:0 }}>{i+1}</span>
+                    <span style={{ fontSize:13, color:theme.muted, width:20, textAlign:"right", flexShrink:0 }}>{i+1}</span>
                     <span style={{ flex:1, fontSize:13, color:theme.text }}>{song}</span>
                     {hasNote && <span style={{ fontSize:11 }}>✍️</span>}
                     {sr != null && (
@@ -636,7 +674,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
                         {sr.toFixed(1)}
                       </span>
                     )}
-                    <span style={{ fontSize:11, color:theme.muted }}>›</span>
+                    <span style={{ fontSize:13, color:theme.muted }}>›</span>
                   </div>
                 );
               })}
@@ -662,7 +700,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
     <Modal onClose={onClose} theme={theme}>
       <h2 style={{ margin:"0 0 20px", fontSize:16, color:theme.text, fontWeight:700 }}>⚙️ Settings</h2>
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Theme</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Theme</div>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
           {THEME_KEYS.map(k => {
             const t = THEMES[k];
@@ -681,8 +719,8 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
         </div>
       </div>
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
-        {[["want","To Listen"],["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
+        {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
               width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.defaultTab===k ? theme.accent : theme.border}`,
@@ -693,7 +731,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
         ))}
       </div>
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Sort listened by</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Sort listened by</div>
         {[["rating","Rating (highest first)"],["year","Year"],["artist","Artist A→Z"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
@@ -704,13 +742,13 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
           </label>
         ))}
         {settings.listenSort === "rating" && (
-          <p style={{ margin:"6px 0 0", fontSize:11, color:theme.muted }}>
+          <p style={{ margin:"6px 0 0", fontSize:13, color:theme.muted }}>
             Albums with the same rating can be reordered with ▲▼ on the Rated & Ranked tab.
           </p>
         )}
       </div>
       <div>
-        <div style={{ fontSize:11, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Display</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Display</div>
         <label style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
           <div style={{
             width:16, height:16, borderRadius:3, border:`2px solid ${settings.compactMode ? theme.accent : theme.border}`,
@@ -792,6 +830,13 @@ export default function App() {
 
   const [wantFilter, setWantFilter]     = useState("all");
   const [listenFilter, setListenFilter] = useState("all");
+  const [searchWant,setSearchWant]=useState("");
+  const [searchHeard,setSearchHeard]=useState("");
+  const [searchTop50,setSearchTop50]=useState("");
+  const [top50Artist,setTop50Artist]=useState("all");
+  const [top50Genre,setTop50Genre]=useState("all");
+  const [wantSort,setWantSort]=useState("default");
+  const [heardSort,setHeardSort]=useState("default");
   const [hideDone, setHideDone]         = useState(false);
   const [editRatingId, setEditRatingId] = useState(null);
   const [editRatingVal, setEditRatingVal] = useState("");
@@ -981,10 +1026,17 @@ useEffect(() => {
     return applyTieOrder(tagged, albumOrder, a => a.id);
   };
 
-  const visibleWant = want.filter(a =>
-    (wantFilter==="all" || a.genre===wantFilter) && (!hideDone || !a.done)
+  let visibleWant = want.filter(a =>
+    (wantFilter==="all" || a.genre===wantFilter) && (!hideDone || !a.done) &&
+    (`${a.artist} ${a.album}`.toLowerCase().includes(searchWant.toLowerCase()))
   );
-  const visibleListened = sortListened(listened.filter(a => listenFilter==="all" || a.genre===listenFilter));
+  if(wantSort==="artist") visibleWant=[...visibleWant].sort((a,b)=>a.artist.localeCompare(b.artist));
+
+  let visibleListened = sortListened(listened.filter(a =>
+    (listenFilter==="all" || a.genre===listenFilter) &&
+    (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
+  ));
+  if(heardSort==="artist") visibleListened=[...visibleListened].sort((a,b)=>a.artist.localeCompare(b.artist));
 
   const moveAlbumInTieGroup = (album, dir) => {
     setAlbumOrder(prev => reorderWithinTieGroup(visibleListened, prev, a => a.id, album.id, dir));
@@ -1090,7 +1142,6 @@ setDeletedWant(cloud.deletedWant || []);
 setDeletedListened(cloud.deletedListened || []);
 
 setTab("heard");
-setTimeout(() => setTab("want"), 100);
 
 alert("Cloud data loaded!");
   }}
@@ -1113,7 +1164,7 @@ alert("Cloud data loaded!");
           }}>⚙️ Settings</button>
         </div>
         <div style={{ display:"flex", gap:0 }}>
-          {[["want","To Listen"],["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([key,label]) => (
+          {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
               padding:"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
               background:"transparent", color: tab===key ? theme.text : theme.muted,
@@ -1132,7 +1183,7 @@ alert("Cloud data loaded!");
                 <div style={{ height:"100%", width:`${Math.round((want.filter(a=>a.done).length/Math.max(want.length,1))*100)}%`,
                   background:`linear-gradient(90deg,${theme.accent},#60a5fa)`, borderRadius:2, transition:"width .4s" }} />
               </div>
-              <span style={{ fontSize:11, color:theme.muted, whiteSpace:"nowrap" }}>{want.filter(a=>a.done).length}/{want.length}</span>
+              <span style={{ fontSize:13, color:theme.muted, whiteSpace:"nowrap" }}>{want.filter(a=>a.done).length}/{want.length}</span>
             </div>
             <FilterBar items={want} active={wantFilter} onSelect={setWantFilter} extra={
               <button onClick={() => setHideDone(p=>!p)} style={{
@@ -1144,7 +1195,7 @@ alert("Cloud data loaded!");
           <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("want")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
-              borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
+              borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"center",
             }}>+ Add album</button>
             {visibleWant.map(a => {
   const c = GENRES[a.genre]?.color || "#888";
@@ -1171,8 +1222,8 @@ alert("Cloud data loaded!");
           src={a.cover}
           alt={a.album}
           style={{
-            width: 48,
-            height: 48,
+            width: 80,
+            height: 80,
             borderRadius: 8,
             objectFit: "cover",
             flexShrink: 0,
@@ -1206,11 +1257,12 @@ alert("Cloud data loaded!");
 
       <div
         onClick={() => setDetailAlbum(a)}
-        style={{ flex:1, minWidth:0, cursor:"pointer" }}
+        style={{ flex:1, minWidth:0, cursor:"pointer", textAlign:"center" }}
       >
         <div style={{
           display:"flex",
           alignItems:"center",
+          justifyContent:"center",
           gap:5,
           flexWrap:"wrap"
         }}>
@@ -1314,6 +1366,10 @@ alert("Cloud data loaded!");
               {avg && <span style={{ fontSize:12, color:theme.muted }}>avg <span style={{ color:"#fbbf24", fontWeight:700, fontSize:15 }}>{avg}</span></span>}
             </div>
             <FilterBar items={listened} active={listenFilter} onSelect={setListenFilter} />
+            <div style={{display:"flex",gap:8,marginTop:8}}>
+            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
+            <select value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
+            </div>
           </div>
           <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("listened")} style={{
@@ -1369,8 +1425,8 @@ alert("Cloud data loaded!");
           src={a.cover}
           alt={a.album}
           style={{
-            width:48,
-            height:48,
+            width:80,
+            height:80,
             borderRadius:8,
             objectFit:"cover",
             flexShrink:0,
@@ -1497,6 +1553,7 @@ alert("Cloud data loaded!");
       >
         🗑️
       </button>
+      <button onClick={() => moveBackToWant(a)} style={{background:"none",border:"none",color:theme.muted,cursor:"pointer",fontSize:12}}>↩</button>
     </div>
   );
 })}
@@ -1505,7 +1562,11 @@ alert("Cloud data loaded!");
       )}
       {/* ══ TOP 50 SONGS ═════════════════════════════════════════════════════ */}
       {tab === "top50" && (
-        <div style={{ padding:"16px 18px" }}>
+        <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
+<div style={{display:"flex",gap:8,marginBottom:10}}>
+<select value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
+<select value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
+</div>
           <p style={{ margin:"0 0 14px", fontSize:12, color:theme.muted }}>
             Rate individual songs inside an album's tracklist to build your leaderboard.
             {top50.length > 0 && ` Showing ${top50.length} rated song${top50.length!==1?"s":""}.`}
@@ -1519,7 +1580,10 @@ alert("Cloud data loaded!");
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {top50.map((s, i) => {
+            {top50.filter(s=>`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase()))
+.filter(s=>top50Artist==="all"||s.artist===top50Artist)
+.filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
+.map((s, i) => {
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album)
                            || want.find(a => a.artist===s.artist && a.album===s.album);
@@ -1548,8 +1612,8 @@ alert("Cloud data loaded!");
     src={albumObj.cover}
     alt={s.album}
     style={{
-      width:48,
-      height:48,
+      width:80,
+      height:80,
       borderRadius:8,
       objectFit:"cover",
       flexShrink:0,
@@ -1566,8 +1630,8 @@ alert("Cloud data loaded!");
   gap:6
 }}>
                     <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{s.song}</div>
-                      <div style={{ fontSize:11, color:theme.muted, marginTop:1 }}>{s.artist} · {s.album}</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:theme.text }}>{s.song}</div>
+                      <div style={{ fontSize:13, color:theme.muted, marginTop:1 }}>{s.artist} · {s.album}</div>
                     </div>
                     {!!notes[s.key] && <span style={{ fontSize:11, flexShrink:0 }}>✍️</span>}
                   </div>
@@ -1581,7 +1645,7 @@ alert("Cloud data loaded!");
                     fontSize:14, fontWeight:800, textAlign:"center", flexShrink:0 }}>
                     {s.rating.toFixed(1)}
                   </div>
-                  <span onClick={() => setDetailSong(s)} style={{ fontSize:11, color:theme.muted, cursor:"pointer", flexShrink:0 }}>›</span>
+                  <span onClick={() => setDetailSong(s)} style={{ fontSize:13, color:theme.muted, cursor:"pointer", flexShrink:0 }}>›</span>
                 </div>
               );
             })}
@@ -1590,7 +1654,8 @@ alert("Cloud data loaded!");
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════════ */}
-      {detailAlbum && (
+      {detailAlbum && (<>
+<div>{detailAlbum?.cover && <img src={detailAlbum.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
         <AlbumDetailModal
           album={detailAlbum} onClose={() => setDetailAlbum(null)}
           trackCache={trackCache} setTrackCache={setTrackCache}
@@ -1598,15 +1663,16 @@ alert("Cloud data loaded!");
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
         />
-      )}
-      {detailSong && (
+      </>) }
+      {detailSong && (<>
+        <div>{detailSong?.cover && <img src={detailSong.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
         <SongDetailModal
           song={detailSong} onClose={() => setDetailSong(null)}
           notes={notes} setNotes={setNotes}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
         />
-      )}
+      </>)}
       {addModal && (
         <AlbumFormModal mode="add" onSave={form => handleAdd(form, addModal)}
           onClose={() => setAddModal(null)} theme={theme} />
