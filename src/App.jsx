@@ -720,7 +720,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
       </div>
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
-        {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
+        {[["want","To Listen"],["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
               width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.defaultTab===k ? theme.accent : theme.border}`,
@@ -1106,59 +1106,9 @@ useEffect(() => {
     fontSize: 12,
     marginRight: 8,
   }}
->
-  ☁ Save
-  
-</button>
-<button
-  onClick={async () => {
-    const { data, error } = await supabase
-      .from("app_data")
-      .select("data")
-      .eq("id", 8)
-      .single();
 
-    if (error) {
-      alert("Cloud load failed");
-      console.error(error);
-      return;
-    }
-
-const cloud = data.data;
-
-console.log("CLOUD WANT LENGTH:", cloud.want.length);
-console.log("LOCAL WANT LENGTH:", want.length);
-
-setWant(cloud.want || []);
-console.log("AFTER SET WANT");
-setListened(cloud.listened || []);
-setTrackCache(cloud.trackCache || {});
-setNotes(cloud.notes || {});
-setSongRatings(cloud.songRatings || {});
-setSettings(cloud.settings || settings);
-setAlbumOrder(cloud.albumOrder || []);
-setSongOrder(cloud.songOrder || []);
-setDeletedWant(cloud.deletedWant || []);
-setDeletedListened(cloud.deletedListened || []);
-
-setTab("heard");
-
-alert("Cloud data loaded!");
-  }}
-  style={{
-    background: theme.card,
-    border: `1px solid ${theme.border}`,
-    color: theme.muted,
-    borderRadius: 8,
-    padding: "5px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  }}
->
-  ☁ Load
-</button>
-          <button onClick={() => setShowSettings(true)} style={{
+ 
+          button onClick={() => setShowSettings(true)} style={{
             background:theme.card, border:`1px solid ${theme.border}`, color:theme.muted,
             borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12,
           }}>⚙️ Settings</button>
