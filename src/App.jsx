@@ -1108,6 +1108,17 @@ useEffect(() => {
     fontSize: 12,
     marginRight: 8,
   }}
+>
+  ☁ Save
+  
+</button>
+<button
+  onClick={async () => {
+    const { data, error } = await supabase
+      .from("app_data")
+      .select("data")
+      .eq("id", 8)
+      .single();
 
     if (error) {
       alert("Cloud load failed");
@@ -1554,15 +1565,9 @@ alert("Cloud data loaded!");
       {/* ══ TOP 50 SONGS ═════════════════════════════════════════════════════ */}
       {tab === "top50" && (
         <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-<<<<<<< HEAD
-<div style={{display:"flex",gap:8,marginBottom:10}}>
-<select value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
-<select value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
-=======
 <div style={{display:"flex",gap:12,marginBottom:14}}>
 <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
 <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
->>>>>>> 836fa7c (Fix Top 50 filter logic and improve filter styling)
 </div>
           <p style={{ margin:"0 0 14px", fontSize:12, color:theme.muted }}>
             Rate individual songs inside an album's tracklist to build your leaderboard.
@@ -1578,11 +1583,6 @@ alert("Cloud data loaded!");
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
             {top50.filter(s=>`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase()))
-<<<<<<< HEAD
-.filter(s=>top50Artist==="all"||s.artist===top50Artist)
-.filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
-=======
->>>>>>> 836fa7c (Fix Top 50 filter logic and improve filter styling)
 .map((s, i) => {
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album)
