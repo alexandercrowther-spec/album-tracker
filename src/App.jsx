@@ -215,10 +215,12 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 // ─── COLOUR HELPERS ───────────────────────────────────────────────────────────
 const ratingColor = r => {
   if (r == null) return "#444";
-  if (r >= 9)   return "#fbbf24";
-  if (r >= 7)   return "#34d399";
-  if (r >= 5)   return "#60a5fa";
-  return "#f87171";
+  if (r >= 10) return "linear-gradient(135deg,#f8e7ff 0%,#cdb8ff 18%,#8be9ff 38%,#baffc9 56%,#fff0a6 74%,#ffb3ec 100%)";
+  if (r >= 9) return "#f78fbf";
+  if (r >= 8) return "#6bb3ff";
+  if (r >= 7) return "#86efac";
+  if (r >= 5) return "#f59e0b";
+  return "#ef4444";
 };
 
 // ─── ORDERING HELPERS ─────────────────────────────────────────────────────────
@@ -383,6 +385,7 @@ function SongRatingInput({ value, onChange, theme }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const rc = ratingColor(value);
+                
 
   const commit = () => {
     const num = parseFloat(draft);
@@ -409,9 +412,9 @@ function SongRatingInput({ value, onChange, theme }) {
     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
       <div onClick={() => { setDraft(value != null ? String(value) : ""); setEditing(true); }} style={{
         padding:"7px 16px", borderRadius:8, cursor:"pointer", minWidth:60, textAlign:"center",
-        background: value != null ? rc+"22" : theme.card,
-        border:`1px solid ${value != null ? rc+"66" : theme.border}`,
-        color: value != null ? rc : theme.muted,
+        background: value != null ? (value>=10 ? "linear-gradient(135deg,#f8e7ff 0%,#cdb8ff 18%,#8be9ff 38%,#baffc9 56%,#fff0a6 74%,#ffb3ec 100%)" : rc+"22") : theme.card,
+        border:`1px solid ${value != null ? (value>=10?"#e9d5ff":rc+"66") : theme.border}`,
+        color: value != null ? (value>=10?"#111827":rc) : theme.muted,
         fontSize: value != null ? 20 : 13, fontWeight:800,
       }}>
         {value != null ? value.toFixed(1) : "Rate it"}
@@ -670,7 +673,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
                     <span style={{ flex:1, fontSize:13, color:theme.text }}>{song}</span>
                     {hasNote && <span style={{ fontSize:11 }}>✍️</span>}
                     {sr != null && (
-                      <span style={{ fontSize:12, fontWeight:800, color:rc, background:rc+"22", padding:"1px 6px", borderRadius:5 }}>
+                      <span style={{ fontSize:12, fontWeight:800, color:(rc.startsWith("linear-gradient")?"#ffffff":rc), textShadow:(rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"), background:(rc.startsWith("linear-gradient")?rc:rc+"22"), padding:"1px 6px", borderRadius:5 }}>
                         {sr.toFixed(1)}
                       </span>
                     )}
@@ -1515,9 +1518,10 @@ alert("Cloud data loaded!");
             padding:"4px 7px",
             borderRadius:6,
             cursor:"pointer",
-            background:a.rating!=null ? rc+"22" : theme.surface,
-            border:`1px solid ${a.rating!=null ? rc+"55" : theme.border}`,
-            color:a.rating!=null ? rc : theme.muted,
+            background:a.rating!=null ? (rc.startsWith("linear-gradient")?rc:rc+"22") : theme.surface,
+            border:`1px solid ${a.rating!=null ? (rc.startsWith("linear-gradient")?"#e9d5ff":rc+"55") : theme.border}`,
+            color:a.rating!=null ? (rc.startsWith("linear-gradient")?"#ffffff":rc) : theme.muted,
+            textShadow:a.rating!=null && rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none",
             fontSize:13,
             fontWeight:800,
             textAlign:"center",
@@ -1641,7 +1645,7 @@ alert("Cloud data loaded!");
                     </div>
                   )}
                   <div onClick={() => setDetailSong(s)} style={{ minWidth:40, padding:"4px 7px", borderRadius:6, cursor:"pointer",
-                    background:rc+"22", border:`1px solid ${rc}55`, color:rc,
+                    background:(rc.startsWith("linear-gradient")?rc:rc+"22"), border:`1px solid ${rc}55`, color:(rc.startsWith("linear-gradient")?"#ffffff":rc), textShadow:(rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"),
                     fontSize:14, fontWeight:800, textAlign:"center", flexShrink:0 }}>
                     {s.rating.toFixed(1)}
                   </div>
