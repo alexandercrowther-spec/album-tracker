@@ -838,6 +838,7 @@ export default function App() {
   const [searchTop50,setSearchTop50]=useState("");
   const [top50Artist,setTop50Artist]=useState("all");
   const [top50Genre,setTop50Genre]=useState("all");
+const [top50RatingRange,setTop50RatingRange]=useState("all");
   const [wantSort,setWantSort]=useState("default");
   const [heardSort,setHeardSort]=useState("default");
   const [hideDone, setHideDone]         = useState(false);
@@ -1053,9 +1054,9 @@ useEffect(() => {
     })
     .filter(s=>top50Artist==="all"||s.artist===top50Artist)
     .filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
-    .sort((a,b)=>b.rating-a.rating)
-    .slice(0,50);
-  const top50 = applyTieOrder(top50Base, songOrder, s => s.key);
+    .filter(s=> top50RatingRange==="all" ? true : (top50RatingRange==="9" ? s.rating>=9 : (s.rating>=Number(top50RatingRange) && s.rating<Number(top50RatingRange)+1)))
+    .sort((a,b)=>b.rating-a.rating);
+  const top50 = (top50RatingRange==="all" ? applyTieOrder(top50Base, songOrder, s => s.key).slice(0,50) : applyTieOrder(top50Base, songOrder, s => s.key));
 
   const moveSongInTieGroup = (song, dir) => {
     setSongOrder(prev => reorderWithinTieGroup(top50, prev, s => s.key, song.key, dir));
@@ -1572,6 +1573,10 @@ alert("Cloud data loaded!");
 <div style={{display:"flex",gap:12,marginBottom:14}}>
 <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
 <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
+<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
+<option value="all">All Ratings</option>
+{Array.from({length:10},(_,i)=><option key={i} value={i}>{i===9?"9-10":`${i}-${i}.9`}</option>)}
+</select>
 </div>
           <p style={{ margin:"0 0 14px", fontSize:12, color:theme.muted }}>
             Rate individual songs inside an album's tracklist to build your leaderboard.
@@ -1586,7 +1591,13 @@ alert("Cloud data loaded!");
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {top50.filter(s=>`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase()))
+            {top50.filter(s=>{
+const searchOk=`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase());
+const artistOk=top50Artist==="all"||s.artist===top50Artist;
+const genreOk=top50Genre==="all"||((listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album))?.genre===top50Genre);
+const ratingOk=top50RatingRange==="all"||(top50RatingRange==="9"?s.rating>=9:(s.rating>=Number(top50RatingRange)&&s.rating<Number(top50RatingRange)+1));
+return searchOk&&artistOk&&genreOk&&ratingOk;
+})
 .map((s, i) => {
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album)
