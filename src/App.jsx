@@ -518,7 +518,7 @@ function SongRatingInput({ value, onChange, theme }) {
 }
 
 // ─── SONG DETAIL MODAL ───────────────────────────────────────────────────────
-function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose }) {
+function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose, onOpenArtist }) {
   const noteKey = `${song.artist}||${song.album}||${song.song}`;
 
   const setRating = val => {
@@ -531,7 +531,12 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose }) 
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
-      <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>{song.artist} · {song.album}</div>
+      <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>
+        <span onClick={() => onOpenArtist(song.artist)} style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
+          onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
+          onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
+        >{song.artist}</span> · {song.album}
+      </div>
       <h2 style={{ margin:"0 0 14px", fontSize:17, color:theme.text, fontWeight:800 }}>{song.song}</h2>
       <div>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
@@ -542,7 +547,7 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose }) 
 }
 
 // ─── ALBUM DETAIL MODAL ──────────────────────────────────────────────────────
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme }) {
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
   const [loading, setLoading] = useState(!tracks);
@@ -664,7 +669,12 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
         <>
           <div style={{ fontSize:11, color:c, fontWeight:700, marginBottom:4 }}>{GENRES[album.genre]?.label}</div>
           <h2 style={{ margin:"0 0 2px", fontSize:18, color:theme.text, fontWeight:800 }}>{album.album}</h2>
-          <div style={{ fontSize:12, color:theme.muted, marginBottom:14 }}>{album.artist} · {album.year}</div>
+          <div style={{ fontSize:12, color:theme.muted, marginBottom:14 }}>
+            <span onClick={() => onOpenArtist(album.artist)} style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
+              onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
+              onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
+            >{album.artist}</span> · {album.year}
+          </div>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
           {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
@@ -706,6 +716,181 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
             }}>+ Add tracks manually</button>
           )}
         </>
+      )}
+    </Modal>
+  );
+}
+
+// ─── ARTIST DETAIL MODAL ─────────────────────────────────────────────────────
+function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum }) {
+  const listenedAlbums = listened.filter(a => a.artist === artist);
+  const wantAlbums = want.filter(a => a.artist === artist);
+
+  const effectiveRating = a => {
+    if (settings.listenSort === "raw") {
+      const songs = trackCache[a.artist + "||" + a.album] || [];
+      const vals = songs.map(s => songRatings[a.artist + "||" + a.album + "||" + s]).filter(v => v != null);
+      return vals.length ? vals.reduce((x, y) => x + y, 0) / vals.length : null;
+    }
+    return a.rating;
+  };
+
+  const sortedListened = [...listenedAlbums].sort((a, b) => {
+    const ar = effectiveRating(a), br = effectiveRating(b);
+    if (ar == null && br == null) return 0;
+    if (ar == null) return 1;
+    if (br == null) return -1;
+    return br - ar;
+  });
+
+  const ratedVals = sortedListened.map(effectiveRating).filter(v => v != null);
+  const artistAvg = ratedVals.length ? (ratedVals.reduce((x, y) => x + y, 0) / ratedVals.length) : null;
+  const avgRc = ratingColor(artistAvg);
+
+  const cover = (listenedAlbums.find(a => a.cover) || wantAlbums.find(a => a.cover))?.cover;
+
+  const topSongs = Object.entries(songRatings)
+    .filter(([k, r]) => r != null && k.startsWith(artist + "||"))
+    .map(([key, rating]) => {
+      const parts = key.split("||");
+      return { key, album: parts[1], song: parts[2], rating };
+    })
+    .sort((a, b) => b.rating - a.rating)
+    .slice(0, 10);
+
+  return (
+    <Modal onClose={onClose} theme={theme} wide>
+      <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18, flexWrap:"wrap" }}>
+        {cover && (
+          <img src={cover} alt={artist} style={{ width:64, height:64, borderRadius:10, objectFit:"cover", flexShrink:0 }} />
+        )}
+        <div style={{ flex:1, minWidth:120 }}>
+          <h2 style={{ margin:"0 0 4px", fontSize:19, color:theme.text, fontWeight:800 }}>{artist}</h2>
+          <div style={{ fontSize:12, color:theme.muted }}>
+            {listenedAlbums.length} heard{wantAlbums.length ? ` · ${wantAlbums.length} on want-list` : ""}
+          </div>
+        </div>
+        {artistAvg != null && (
+          <div style={{
+            minWidth:56, padding:"8px 12px", borderRadius:9, textAlign:"center", flexShrink:0,
+            background:(avgRc.startsWith("linear-gradient")?avgRc:avgRc+"22"), border:`1px solid ${avgRc}55`,
+            color:(avgRc.startsWith("linear-gradient")?"#ffffff":avgRc),
+            textShadow:(avgRc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"),
+          }}>
+            <div style={{ fontSize:18, fontWeight:800 }}>{artistAvg.toFixed(2)}</div>
+            <div style={{ fontSize:9, opacity:0.85 }}>{settings.listenSort === "raw" ? "raw avg" : "avg rating"}</div>
+          </div>
+        )}
+      </div>
+
+      {sortedListened.length > 0 && (
+        <div style={{ marginBottom:22 }}>
+          <div style={{ fontSize:12, color:theme.muted, marginBottom:8, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+            Albums heard
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {sortedListened.map((a, i) => {
+              const c = GENRES[a.genre]?.color || "#888";
+              const rating = effectiveRating(a);
+              const rc = ratingColor(rating);
+              return (
+                <div key={a.id} onClick={() => onOpenAlbum(a, "listened")} style={{
+                  display:"flex", alignItems:"center", gap:10, padding:"8px 10px", cursor:"pointer",
+                  background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
+                }}>
+                  <div style={{ width:20, textAlign:"right", fontSize:11, color: rating!=null ? theme.muted : theme.border, fontWeight:700, flexShrink:0 }}>
+                    {rating != null ? i + 1 : "—"}
+                  </div>
+                  {a.cover && <img src={a.cover} alt={a.album} style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{a.album}</div>
+                    <div style={{ fontSize:11, color:theme.muted }}>{a.year}</div>
+                  </div>
+                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
+                    {GENRES[a.genre]?.label}
+                  </div>
+                  <div style={{
+                    minWidth:36, padding:"3px 6px", borderRadius:6, textAlign:"center", flexShrink:0,
+                    background:(rating!=null ? (rc.startsWith("linear-gradient")?rc:rc+"22") : theme.surface),
+                    border:`1px solid ${rating!=null ? rc+"55" : theme.border}`,
+                    color:(rating!=null ? (rc.startsWith("linear-gradient")?"#ffffff":rc) : theme.muted),
+                    textShadow:(rating!=null && rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"),
+                    fontSize:13, fontWeight:800,
+                  }}>
+                    {rating != null ? rating.toFixed(1) : "+"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {wantAlbums.length > 0 && (
+        <div style={{ marginBottom:22 }}>
+          <div style={{ fontSize:12, color:theme.muted, marginBottom:8, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+            Want to hear
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {wantAlbums.map(a => {
+              const c = GENRES[a.genre]?.color || "#888";
+              return (
+                <div key={a.id} onClick={() => onOpenAlbum(a, "want")} style={{
+                  display:"flex", alignItems:"center", gap:10, padding:"8px 10px", cursor:"pointer",
+                  background: a.done ? theme.surface : theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
+                  opacity: a.done ? 0.5 : 1,
+                }}>
+                  {a.cover && <img src={a.cover} alt={a.album} style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:theme.text, textDecoration: a.done ? "line-through" : "none" }}>{a.album}</div>
+                    <div style={{ fontSize:11, color:theme.muted }}>{a.year}</div>
+                  </div>
+                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
+                    {GENRES[a.genre]?.label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {topSongs.length > 0 && (
+        <div>
+          <div style={{ fontSize:12, color:theme.muted, marginBottom:8, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+            Top rated songs
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+            {topSongs.map((s, i) => {
+              const rc = ratingColor(s.rating);
+              return (
+                <div key={s.key} style={{
+                  display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
+                  background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
+                }}>
+                  <div style={{ width:16, textAlign:"right", fontSize:11, color:theme.muted, fontWeight:700, flexShrink:0 }}>{i + 1}</div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{s.song}</div>
+                    <div style={{ fontSize:11, color:theme.muted }}>{s.album}</div>
+                  </div>
+                  <div style={{
+                    minWidth:36, padding:"3px 6px", borderRadius:6, textAlign:"center", flexShrink:0,
+                    background:(rc.startsWith("linear-gradient")?rc:rc+"22"), border:`1px solid ${rc}55`,
+                    color:(rc.startsWith("linear-gradient")?"#ffffff":rc),
+                    textShadow:(rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"),
+                    fontSize:13, fontWeight:800,
+                  }}>
+                    {s.rating.toFixed(1)}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {sortedListened.length === 0 && wantAlbums.length === 0 && (
+        <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"20px 0" }}>No albums found for this artist.</div>
       )}
     </Modal>
   );
@@ -864,6 +1049,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
 
   const [detailAlbum, setDetailAlbum]   = useState(null);
   const [detailSong, setDetailSong]     = useState(null);
+  const [detailArtist, setDetailArtist] = useState(null);
   const [addModal, setAddModal]         = useState(null);
   const [editModal, setEditModal]       = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -972,6 +1158,12 @@ useEffect(() => {
     } else {
       setWant(prev => prev.map(a => a.id === id ? {...a, done:!a.done} : a));
     }
+  };
+
+  // move a listened album back to the want-to-hear list
+  const moveBackToWant = (album) => {
+    setWant(prev => [{ id:uid(), artist:album.artist, album:album.album, year:album.year, genre:album.genre, cover:album.cover, done:false }, ...prev]);
+    setListened(prev => prev.filter(a => a.id !== album.id));
   };
 
   const handleAdd = async (form, source) => {
@@ -1253,7 +1445,11 @@ useEffect(() => {
             color:theme.muted,
             marginTop:1
           }}>
-            {a.artist} · {a.year}
+            <span onClick={e => { e.stopPropagation(); setDetailArtist(a.artist); }}
+              style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
+              onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
+              onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
+            >{a.artist}</span> · {a.year}
             {a.note ? ` · ${a.note}` : ""}
           </div>
         )}
@@ -1398,7 +1594,11 @@ useEffect(() => {
             color:theme.muted,
             marginTop:1
           }}>
-            {a.artist} · {a.year}
+            <span onClick={e => { e.stopPropagation(); setDetailArtist(a.artist); }}
+              style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
+              onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
+              onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
+            >{a.artist}</span> · {a.year}
           </div>
         )}
       </div>
@@ -1577,7 +1777,13 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:16, fontWeight:700, color:theme.text }}>{s.song}</div>
-                      <div style={{ fontSize:13, color:theme.muted, marginTop:1 }}>{s.artist} · {s.album}</div>
+                      <div style={{ fontSize:13, color:theme.muted, marginTop:1 }}>
+                        <span onClick={e => { e.stopPropagation(); setDetailArtist(s.artist); }}
+                          style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
+                          onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
+                          onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
+                        >{s.artist}</span> · {s.album}
+                      </div>
                     </div>
                   </div>
                   {albumObj && (
@@ -1606,6 +1812,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           trackCache={trackCache} setTrackCache={setTrackCache}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
+          onOpenArtist={name => { setDetailAlbum(null); setDetailArtist(name); }}
         />
       </>) }
       {detailSong && (<>
@@ -1614,8 +1821,18 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           song={detailSong} onClose={() => setDetailSong(null)}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
+          onOpenArtist={name => { setDetailSong(null); setDetailArtist(name); }}
         />
       </>)}
+      {detailArtist && (
+        <ArtistDetailModal
+          artist={detailArtist} onClose={() => setDetailArtist(null)}
+          want={want} listened={listened}
+          trackCache={trackCache} songRatings={songRatings}
+          settings={settings} theme={theme}
+          onOpenAlbum={(album) => { setDetailArtist(null); setDetailAlbum(album); }}
+        />
+      )}
       {addModal && (
         <AlbumFormModal mode="add" onSave={form => handleAdd(form, addModal)}
           onClose={() => setAddModal(null)} theme={theme} />
