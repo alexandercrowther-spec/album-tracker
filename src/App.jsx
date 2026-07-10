@@ -2,63 +2,91 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "./supabase";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
-hiphop:      { label: "Hip-Hop", color: "#f87171" },
-  rap:         { label: "Rap", color: "#fb923c" },
+  hiphop:           { label: "Hip-Hop", color: "#f87171" },
+  rap:              { label: "Rap", color: "#fb923c" },
+  trap:             { label: "Trap", color: "#fca5a5" },
+  drill:            { label: "Drill", color: "#dc2626" },
+  boombap:          { label: "Boom Bap", color: "#f97316" },
+  grime:            { label: "Grime", color: "#b91c1c" },
 
-  alternative: { label: "Alternative Rock", color: "#a78bfa" },
-  indie:       { label: "Indie Rock", color: "#c084fc" },
-  rock:        { label: "Classic Rock", color: "#60a5fa" },
-  psychrock:   { label: "Psychedelic Rock", color: "#8b5cf6" },
-  progrock:    { label: "Progressive Rock", color: "#6366f1" },
-  jazzrock:    { label: "Jazz Rock", color: "#3b82f6" },
-  punk:        { label: "Punk", color: "#ef4444" },
-  metal:       { label: "Metal", color: "#9ca3af" },
+  alternative:      { label: "Alternative Rock", color: "#a78bfa" },
+  indie:            { label: "Indie Rock", color: "#c084fc" },
+  indiepop:         { label: "Indie Pop", color: "#f472b6" },
+  rock:             { label: "Classic Rock", color: "#60a5fa" },
+  hardrock:         { label: "Hard Rock", color: "#dc2626" },
+  psychrock:        { label: "Psychedelic Rock", color: "#8b5cf6" },
+  progrock:         { label: "Progressive Rock", color: "#6366f1" },
+  jazzrock:         { label: "Jazz Rock", color: "#3b82f6" },
+  punk:             { label: "Punk", color: "#ef4444" },
+  postpunk:         { label: "Post-Punk", color: "#6366f1" },
+  hardcorepunk:     { label: "Hardcore Punk", color: "#b91c1c" },
+  emo:              { label: "Emo", color: "#7c3aed" },
+  metal:            { label: "Metal", color: "#9ca3af" },
+  metalcore:        { label: "Metalcore", color: "#57534e" },
+  grunge:           { label: "Grunge", color: "#78716c" },
+  artrock:          { label: "Art Rock", color: "#3b82f6" },
+  poprock:          { label: "Pop Rock", color: "#ec4899" },
+  shoegaze:         { label: "Shoegaze", color: "#8b5cf6" },
+  dreampop:         { label: "Dream Pop", color: "#a855f7" },
+  newwave:          { label: "New Wave", color: "#06b6d4" },
+  britpop:          { label: "Britpop", color: "#f59e0b" },
+  garagerock:       { label: "Garage Rock", color: "#ef4444" },
+  mathrock:         { label: "Math Rock", color: "#4f46e5" },
+  postrock:         { label: "Post-Rock", color: "#4338ca" },
+  southernrock:     { label: "Southern Rock", color: "#ea580c" },
+  glamrock:         { label: "Glam Rock", color: "#d946ef" },
+  bluegrass:        { label: "Bluegrass", color: "#65a30d" },
 
-  pop:         { label: "Pop", color: "#f9a8d4" },
-  synthpop:    { label: "Synth-Pop", color: "#ec4899" },
+  pop:              { label: "Pop", color: "#f9a8d4" },
+  synthpop:         { label: "Synth-Pop", color: "#ec4899" },
+  powerpop:         { label: "Power Pop", color: "#f9a8d4" },
+  kpop:             { label: "K-Pop", color: "#f472b6" },
+  jpop:             { label: "J-Pop", color: "#fb7185" },
+  chamberpop:       { label: "Chamber Pop", color: "#fb7185" },
 
-  jazz:        { label: "Jazz", color: "#fbbf24" },
-  soul:        { label: "Soul", color: "#f59e0b" },
-  rnb:         { label: "R&B", color: "#f472b6" },
-  funk:        { label: "Funk / Disco", color: "#eab308" },
+  jazz:             { label: "Jazz", color: "#fbbf24" },
+  soul:             { label: "Soul", color: "#f59e0b" },
+  neosoul:          { label: "Neo Soul", color: "#f59e0b" },
+  rnb:              { label: "R&B", color: "#f472b6" },
+  funk:             { label: "Funk / Disco", color: "#eab308" },
+  disco:            { label: "Disco", color: "#eab308" },
+  gospel:           { label: "Gospel", color: "#facc15" },
+  blues:            { label: "Blues", color: "#0284c7" },
+  triphop:          { label: "Trip Hop", color: "#14b8a6" },
 
-  folk:        { label: "Folk", color: "#34d399" },
+  folk:             { label: "Folk", color: "#34d399" },
+  folkrock:         { label: "Folk Rock", color: "#22c55e" },
   singersongwriter: { label: "Singer-Songwriter", color: "#22c55e" },
-  country:     { label: "Country", color: "#a3e635" },
-  americana:   { label: "Americana", color: "#84cc16" },
+  country:          { label: "Country", color: "#a3e635" },
+  americana:        { label: "Americana", color: "#84cc16" },
 
-  electronic:  { label: "Electronic", color: "#38bdf8" },
-  ambient:     { label: "Ambient", color: "#06b6d4" },
+  electronic:       { label: "Electronic", color: "#38bdf8" },
+  house:            { label: "House", color: "#06b6d4" },
+  techno:           { label: "Techno", color: "#0891b2" },
+  dubstep:          { label: "Dubstep", color: "#0ea5e9" },
+  drumandbass:      { label: "Drum & Bass", color: "#0369a1" },
+  idm:              { label: "IDM", color: "#0e7490" },
+  ambient:          { label: "Ambient", color: "#06b6d4" },
+  downtempo:        { label: "Downtempo", color: "#22d3ee" },
+  vaporwave:        { label: "Vaporwave", color: "#f0abfc" },
+  lofi:             { label: "Lo-Fi", color: "#a5b4fc" },
+  industrial:       { label: "Industrial", color: "#525252" },
 
-  classical:   { label: "Classical", color: "#94a3b8" },
+  classical:        { label: "Classical", color: "#94a3b8" },
+  soundtrack:       { label: "Soundtrack / Score", color: "#818cf8" },
+  musical:          { label: "Musical Theatre", color: "#fb923c" },
 
-  soundtrack:  { label: "Soundtrack / Score", color: "#818cf8" },
+  reggae:           { label: "Reggae", color: "#16a34a" },
+  ska:              { label: "Ska", color: "#059669" },
+  afrobeat:         { label: "Afrobeat", color: "#ca8a04" },
+  latin:            { label: "Latin", color: "#f59e0b" },
+  worldmusic:       { label: "World", color: "#0d9488" },
 
-  britpop:{ label:"Britpop", color:"#f59e0b"},
-poprock:{ label:"Pop Rock", color:"#ec4899"},
-shoegaze:{ label:"Shoegaze", color:"#8b5cf6"},
-dreampop:{ label:"Dream Pop", color:"#a855f7"},
-postpunk:{ label:"Post-Punk", color:"#6366f1"},
-newwave:{ label:"New Wave", color:"#06b6d4"},
-grunge:{ label:"Grunge", color:"#78716c"},
-artrock:{ label:"Art Rock", color:"#3b82f6"},
-triphop:{ label:"Trip Hop", color:"#14b8a6"},
-synthpop:{ label:"Synth Pop", color:"#0ea5e9"},
-progressiverock:{ label:"Progressive Rock", color:"#2563eb"},
-hardrock:{ label:"Hard Rock", color:"#dc2626"},
-metal:{ label:"Metal", color:"#991b1b"},
-punk:{ label:"Punk", color:"#f97316"},
-other:       { label: "Other", color: "#6b7280" },
+  experimental:     { label: "Experimental", color: "#7e22ce" },
+  noise:            { label: "Noise", color: "#374151" },
+  comedy:           { label: "Comedy", color: "#facc15" },
 
-indiepop:{ label:"Indie Pop", color:"#f472b6"},
-chamberpop:{ label:"Chamber Pop", color:"#fb7185"},
-folkrock:{ label:"Folk Rock", color:"#22c55e"},
-garagerock:{ label:"Garage Rock", color:"#ef4444"},
-neosoul:{ label:"Neo Soul", color:"#f59e0b"},
-boombap:{ label:"Boom Bap", color:"#f97316"},
-house:{ label:"House", color:"#06b6d4"},
-techno:{ label:"Techno", color:"#0891b2"},
-
+  other:            { label: "Other", color: "#6b7280" },
 };
 const GENRE_KEYS = Object.keys(GENRES);
 
@@ -184,13 +212,49 @@ const THEMES = {
     label: "Sunset", bg: "#1a0d08", surface: "#24120c", card: "#311810",
     border: "#4a2418", text: "#ffedd5", muted: "#b07a5b", accent: "#fb923c",
   },
+  plum: {
+    label: "Plum", bg: "#120a16", surface: "#1c1023", card: "#25152e",
+    border: "#3a2148", text: "#f0e3ff", muted: "#7a5f96", accent: "#c084fc",
+  },
+  rosegold: {
+    label: "Rose Gold", bg: "#150c0e", surface: "#221316", card: "#2c191d",
+    border: "#432429", text: "#ffe4e6", muted: "#a06a72", accent: "#fb7185",
+  },
+  arctic: {
+    label: "Arctic", bg: "#0a1014", surface: "#101a20", card: "#16232b",
+    border: "#213641", text: "#e0f2fe", muted: "#5c7c8c", accent: "#67e8f9",
+  },
+  mono: {
+    label: "Mono", bg: "#0a0a0a", surface: "#151515", card: "#1c1c1c",
+    border: "#2a2a2a", text: "#f5f5f5", muted: "#737373", accent: "#e5e5e5",
+  },
+  coffee: {
+    label: "Coffee", bg: "#120d0a", surface: "#1d1610", card: "#261c14",
+    border: "#3a2c1e", text: "#f0e2d0", muted: "#8a715a", accent: "#d97706",
+  },
+  neon: {
+    label: "Neon", bg: "#08050f", surface: "#100a1f", card: "#160e2b",
+    border: "#2a1b4a", text: "#eafff4", muted: "#5c6a8a", accent: "#39ff9f",
+  },
+  lavender: {
+    label: "Lavender", bg: "#100e1a", surface: "#181428", card: "#201a35",
+    border: "#332a55", text: "#ece8ff", muted: "#8078a8", accent: "#a5b4fc",
+  },
+  cherry: {
+    label: "Cherry", bg: "#150608", surface: "#210b0e", card: "#2b0f13",
+    border: "#451a20", text: "#ffe0e3", muted: "#a15c63", accent: "#fb2c5c",
+  },
+  paper: {
+    label: "Paper", bg: "#1a1812", surface: "#26221a", card: "#2f2a20",
+    border: "#443c2c", text: "#f2ecd9", muted: "#a4977a", accent: "#eab308",
+  },
 };
 const THEME_KEYS = Object.keys(THEMES);
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 const SK = {
   want: "wantlist-v4", listened: "listened-v4",
-  tracks: "trackcache-v2", notes: "songnotes-v2",
+  tracks: "trackcache-v2",
   songRatings: "songratings-v1", settings: "settings-v1",
   albumOrder: "albumorder-v1", songOrder: "songorder-v1",
   // NEW: store set of IDs permanently deleted by the user
@@ -209,6 +273,19 @@ function mergeWithSeed(seed, saved, deletedIds) {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+// ─── RESPONSIVE HELPER ────────────────────────────────────────────────────────
+function useIsMobile(breakpoint = 480) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= breakpoint : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
 
 
 
@@ -334,7 +411,13 @@ function ReorderArrows({ canUp, canDown, onUp, onDown, theme }) {
 // ─── ALBUM FORM ──────────────────────────────────────────────────────────────
 function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
   const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop", cover:"" });
+  const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(p => ({...p, [k]: v}));
+  const submit = async () => {
+    if (!form.artist || !form.album) return;
+    setSaving(true);
+    await onSave(form);
+  };
   return (
     <Modal onClose={onClose} theme={theme}>
       <h2 style={{ margin:"0 0 18px", fontSize:16, color:theme.text, fontWeight:700 }}>
@@ -346,7 +429,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
           <input type={type} value={form[key]}
             onChange={e => set(key, type==="number" ? parseInt(e.target.value)||"" : e.target.value)}
             style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-              borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none", boxSizing:"border-box" }}
+              borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
           />
         </div>
       ))}
@@ -354,12 +437,12 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
         <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none" }}>
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none" }}>
           {GENRE_KEYS.map(g => <option key={g} value={g}>{GENRES[g].label}</option>)}
         </select>
       </div>
 
-      <div style={{ marginBottom:18 }}>
+      <div style={{ marginBottom:8 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
         <input
           type="text"
@@ -367,14 +450,20 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
           onChange={e => set("cover", e.target.value)}
           placeholder="https://..."
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13,
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16,
             outline:"none", boxSizing:"border-box" }}
         />
       </div>
-      <button onClick={() => { if (form.artist && form.album) onSave(form); }}
+      {mode !== "edit" && (
+        <div style={{ fontSize:11, color:theme.muted, marginBottom:14 }}>
+          Cover art and the tracklist are looked up automatically once you add the album.
+        </div>
+      )}
+      <button onClick={submit} disabled={saving}
         style={{ width:"100%", padding:"10px", background:theme.accent, border:"none",
-          borderRadius:8, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
-        {mode === "edit" ? "Save changes" : "Add album"}
+          borderRadius:8, color:"#fff", fontWeight:700, fontSize:14, cursor: saving ? "default" : "pointer",
+          opacity: saving ? 0.7 : 1 }}>
+        {saving ? "Looking up tracklist…" : (mode === "edit" ? "Save changes" : "Add album")}
       </button>
     </Modal>
   );
@@ -428,63 +517,8 @@ function SongRatingInput({ value, onChange, theme }) {
   );
 }
 
-// ─── NOTE SECTION ─────────────────────────────────────────────────────────────
-function NoteSection({ value, onChange, theme }) {
-  const [editing, setEditing] = useState(!value);
-  const [draft, setDraft] = useState(value || "");
-
-  useEffect(() => {
-    setDraft(value || "");
-    setEditing(!value);
-  }, [value]);
-
-  const save = () => {
-    const trimmed = draft.trim();
-    onChange(trimmed === "" ? "" : draft);
-    setEditing(false);
-  };
-
-  if (editing || !value) return (
-    <div>
-      <textarea autoFocus value={draft} onChange={e => setDraft(e.target.value)}
-        placeholder="Write your thoughts on this track…" rows={6}
-        style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-          borderRadius:8, padding:"10px", color:theme.text, fontSize:13, outline:"none",
-          resize:"vertical", boxSizing:"border-box", fontFamily:"inherit", lineHeight:1.5 }}
-      />
-      <div style={{ display:"flex", gap:8, marginTop:8 }}>
-        <button onClick={save} style={{
-          flex:1, padding:"9px", background:theme.accent, border:"none",
-          borderRadius:8, color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
-        }}>Save</button>
-        {!!value && (
-          <button onClick={() => { setDraft(value); setEditing(false); }} style={{
-            padding:"9px 14px", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:8, color:theme.muted, fontSize:13, cursor:"pointer",
-          }}>Cancel</button>
-        )}
-      </div>
-    </div>
-  );
-
-  return (
-    <div>
-      <div style={{ background:theme.card, border:`1px solid ${theme.border}`, borderRadius:10, padding:"18px 20px" }}>
-        <p style={{ margin:0, color:theme.text, fontSize:16, lineHeight:1.7,
-          fontFamily:"Georgia, 'Iowan Old Style', 'Times New Roman', serif",
-          whiteSpace:"pre-wrap", wordBreak:"break-word" }}>{value}</p>
-      </div>
-      <button onClick={() => setEditing(true)} style={{
-        marginTop:8, padding:"6px 12px", background:"none",
-        border:`1px solid ${theme.border}`, borderRadius:8,
-        color:theme.muted, fontSize:12, cursor:"pointer",
-      }}>✏️ Edit</button>
-    </div>
-  );
-}
-
 // ─── SONG DETAIL MODAL ───────────────────────────────────────────────────────
-function SongDetailModal({ song, notes, setNotes, songRatings, setSongRatings, theme, onClose }) {
+function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose }) {
   const noteKey = `${song.artist}||${song.album}||${song.song}`;
 
   const setRating = val => {
@@ -495,28 +529,20 @@ function SongDetailModal({ song, notes, setNotes, songRatings, setSongRatings, t
     persist(SK.songRatings, next);
   };
 
-  const setNote = val => {
-    const next = { ...notes, [noteKey]: val };
-    setNotes(next);
-    persist(SK.notes, next);
-  };
-
   return (
     <Modal onClose={onClose} theme={theme} wide>
       <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>{song.artist} · {song.album}</div>
       <h2 style={{ margin:"0 0 14px", fontSize:17, color:theme.text, fontWeight:800 }}>{song.song}</h2>
-      <div style={{ marginBottom:18 }}>
+      <div>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
         <SongRatingInput value={songRatings[noteKey]} onChange={setRating} theme={theme} />
       </div>
-      <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Notes</div>
-      <NoteSection value={notes[noteKey] || ""} onChange={setNote} theme={theme} />
     </Modal>
   );
 }
 
 // ─── ALBUM DETAIL MODAL ──────────────────────────────────────────────────────
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, setNotes, songRatings, setSongRatings, theme }) {
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
   const [loading, setLoading] = useState(!tracks);
@@ -535,16 +561,9 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
   setLoading(false);
 }, []);
 
-  const noteKey = s => `${cacheKey}||${s}`;
   const ratingKey = s => `${cacheKey}||${s}`;
 
   const openSong = (song) => { setActiveSong(song); setView("song"); };
-
-  const setSongNote = (song, val) => {
-    const next = { ...notes, [noteKey(song)]: val };
-    setNotes(next);
-    persist(SK.notes, next);
-  };
 
   const setSongRating = (song, val) => {
     const num = parseFloat(val);
@@ -597,7 +616,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); etAdd(); } }}
                   placeholder={`Track ${i + 1}`}
                   style={{ flex:1, background:theme.card, border:`1px solid ${theme.border}`,
-                    borderRadius:7, padding:"7px 10px", color:theme.text, fontSize:13,
+                    borderRadius:7, padding:"7px 10px", color:theme.text, fontSize:16,
                     outline:"none", boxSizing:"border-box" }}
                 />
                 <button onClick={() => etMove(t.id, -1)} disabled={i === 0} style={{
@@ -634,12 +653,10 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
           <div style={{ fontSize:13, color:theme.muted, marginBottom:2 }}>{album.album}</div>
           <h2 style={{ margin:"0 0 14px", fontSize:17, color:theme.text, fontWeight:800 }}>{activeSong}</h2>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:180,maxWidth:"100%",borderRadius:10}} /></div>}
-          <div style={{ marginBottom:18 }}>
+          <div>
             <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
             <SongRatingInput value={songRatings[ratingKey(activeSong)]} onChange={val => setSongRating(activeSong, val)} theme={theme} />
           </div>
-          <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Notes</div>
-          <NoteSection value={notes[noteKey(activeSong)] || ""} onChange={val => setSongNote(activeSong, val)} theme={theme} />
         </>
       )}
 
@@ -660,18 +677,16 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
           {currentTracks && (
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               {currentTracks.map((song, i) => {
-                const hasNote = !!notes[noteKey(song)];
                 const sr = songRatings[ratingKey(song)];
                 const rc = ratingColor(sr);
                 return (
                   <div key={i} onClick={() => openSong(song)} style={{
                     display:"flex", alignItems:"center", gap:10, padding:"9px 12px",
                     background:theme.card, borderRadius:8, cursor:"pointer",
-                    border: hasNote || sr != null ? `1px solid ${c}40` : `1px solid ${theme.border}`,
+                    border: sr != null ? `1px solid ${c}40` : `1px solid ${theme.border}`,
                   }}>
                     <span style={{ fontSize:13, color:theme.muted, width:20, textAlign:"right", flexShrink:0 }}>{i+1}</span>
                     <span style={{ flex:1, fontSize:13, color:theme.text }}>{song}</span>
-                    {hasNote && <span style={{ fontSize:11 }}>✍️</span>}
                     {sr != null && (
                       <span style={{ fontSize:12, fontWeight:800, color:(rc.startsWith("linear-gradient")?"#ffffff":rc), textShadow:(rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"), background:(rc.startsWith("linear-gradient")?rc:rc+"22"), padding:"1px 6px", borderRadius:5 }}>
                         {sr.toFixed(1)}
@@ -723,7 +738,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
       </div>
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
-        {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
+        {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
               width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.defaultTab===k ? theme.accent : theme.border}`,
@@ -732,25 +747,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
             <span style={{ fontSize:13, color:theme.text }}>{l}</span>
           </label>
         ))}
-      </div>
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Sort listened by</div>
-        {[["rating","Rating (highest first)"],["year","Year"],["artist","Artist A→Z"]].map(([k,l]) => (
-          <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
-            <div style={{
-              width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.listenSort===k ? theme.accent : theme.border}`,
-              background: settings.listenSort===k ? theme.accent : "transparent", flexShrink:0,
-            }} onClick={() => set("listenSort", k)} />
-            <span style={{ fontSize:13, color:theme.text }}>{l}</span>
-          </label>
-        ))}
-        {settings.listenSort === "rating" && (
-          <p style={{ margin:"6px 0 0", fontSize:13, color:theme.muted }}>
-            Albums with the same rating can be reordered with ▲▼ on the Rated & Ranked tab.
-          </p>
-        )}
-      </div>
-      <div>
+      </div><div>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Display</div>
         <label style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
           <div style={{
@@ -788,26 +785,44 @@ function ConfirmModal({ message, subMessage, onConfirm, onClose, theme, dangerou
   );
 }
 
-async function getAlbumCover(artist, album) {
+async function getAlbumInfo(artist, album) {
   try {
     const q = encodeURIComponent(`${artist} ${album}`);
     const res = await fetch(
       `https://itunes.apple.com/search?term=${q}&entity=album&limit=1`
     );
-
     const data = await res.json();
 
-    if (data.results?.length) {
-      return data.results[0].artworkUrl100.replace(
-        "100x100bb",
-        "600x600bb"
-      );
+    if (!data.results?.length) return { cover: null, tracks: [] };
+
+    const result = data.results[0];
+    const cover = result.artworkUrl100
+      ? result.artworkUrl100.replace("100x100bb", "600x600bb")
+      : null;
+
+    let tracks = [];
+    if (result.collectionId) {
+      try {
+        const lookupRes = await fetch(
+          `https://itunes.apple.com/lookup?id=${result.collectionId}&entity=song`
+        );
+        const lookupData = await lookupRes.json();
+        tracks = (lookupData.results || [])
+          .filter(r => r.wrapperType === "track" && r.kind === "song")
+          .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
+          .map(r => r.trackName)
+          .filter(Boolean);
+      } catch (e) {
+        console.error(e);
+      }
     }
+
+    return { cover, tracks };
   } catch (e) {
     console.error(e);
   }
 
-  return null;
+  return { cover: null, tracks: [] };
 }
 
 // ─── MAIN ────────────────────────────────────────────────────────────────────
@@ -816,6 +831,9 @@ export default function App() {
     theme: "midnight", defaultTab: "want", listenSort: "rating", compactMode: false,
   }));
   const theme = THEMES[settings.theme] || THEMES.midnight;
+  const isMobile = useIsMobile();
+  const coverSize = isMobile ? 46 : 80;
+  const rowGap = isMobile ? 6 : 9;
 
   const [tab, setTab] = useState(settings.defaultTab || "want");
 
@@ -826,7 +844,6 @@ export default function App() {
   const [want, setWant]         = useState(() => mergeWithSeed(SEED_WANT,     loadLS(SK.want, null),     loadLS(SK.deletedWant, [])));
   const [listened, setListened] = useState(() => mergeWithSeed(SEED_LISTENED, loadLS(SK.listened, null), loadLS(SK.deletedListened, [])));
   const [trackCache, setTrackCache] = useState(() => loadLS(SK.tracks, {}));
-  const [notes, setNotes]       = useState(() => loadLS(SK.notes, {}));
   const [songRatings, setSongRatings] = useState(() => loadLS(SK.songRatings, {}));
   const [albumOrder, setAlbumOrder] = useState(() => loadLS(SK.albumOrder, []));
   const [songOrder, setSongOrder]   = useState(() => loadLS(SK.songOrder, []));
@@ -840,7 +857,7 @@ export default function App() {
   const [top50Genre,setTop50Genre]=useState("all");
 const [top50RatingRange,setTop50RatingRange]=useState("all");
   const [wantSort,setWantSort]=useState("default");
-  const [heardSort,setHeardSort]=useState("default");
+  const [heardSort,setHeardSort]=useState(settings.listenSort==="rating"?"final":"default");
   const [hideDone, setHideDone]         = useState(false);
   const [editRatingId, setEditRatingId] = useState(null);
   const [editRatingVal, setEditRatingVal] = useState("");
@@ -877,7 +894,6 @@ useEffect(() => {
     setWant(cloud.want || []);
     setListened(cloud.listened || []);
     setTrackCache(cloud.trackCache || {});
-    setNotes(cloud.notes || {});
     setSongRatings(cloud.songRatings || {});
     setSettings(cloud.settings || settings);
     setAlbumOrder(cloud.albumOrder || []);
@@ -895,7 +911,6 @@ useEffect(() => {
       want,
       listened,
       trackCache,
-      notes,
       songRatings,
       settings,
       albumOrder,
@@ -917,7 +932,6 @@ useEffect(() => {
   want,
   listened,
   trackCache,
-  notes,
   songRatings,
   settings,
   albumOrder,
@@ -931,23 +945,18 @@ useEffect(() => {
     const cacheKey = `${album.artist}||${album.album}`;
     // album-level rating (listened tab)
     if (album.rating != null) return true;
-    // any song ratings or notes under this album
+    // any song ratings under this album
     const prefix = cacheKey + "||";
-    return (
-      Object.keys(songRatings).some(k => k.startsWith(prefix) && songRatings[k] != null) ||
-      Object.keys(notes).some(k => k.startsWith(prefix) && notes[k])
-    );
+    return Object.keys(songRatings).some(k => k.startsWith(prefix) && songRatings[k] != null);
   };
 
   const buildDeleteWarning = (album) => {
     const cacheKey = `${album.artist}||${album.album}`;
     const prefix = cacheKey + "||";
     const ratedSongs = Object.keys(songRatings).filter(k => k.startsWith(prefix) && songRatings[k] != null).length;
-    const notedSongs = Object.keys(notes).filter(k => k.startsWith(prefix) && notes[k]).length;
     const parts = [];
     if (album.rating != null) parts.push(`album rating (${album.rating.toFixed(1)})`);
     if (ratedSongs > 0) parts.push(`${ratedSongs} song rating${ratedSongs > 1 ? "s" : ""}`);
-    if (notedSongs > 0) parts.push(`notes on ${notedSongs} song${notedSongs > 1 ? "s" : ""}`);
     return parts.length > 0
       ? `⚠️ This will also delete: ${parts.join(", ")}. This can't be undone.`
       : null;
@@ -966,8 +975,8 @@ useEffect(() => {
   };
 
   const handleAdd = async (form, source) => {
-  const cover = form.cover?.trim() ? form.cover.trim() : await getAlbumCover(form.artist, form.album);
-  console.log("COVER URL:", cover);
+  const { cover: fetchedCover, tracks } = await getAlbumInfo(form.artist, form.album);
+  const cover = form.cover?.trim() ? form.cover.trim() : fetchedCover;
 
   const entry = {
     ...form,
@@ -980,6 +989,15 @@ useEffect(() => {
     setWant(prev => [...prev, { ...entry, done: false }]);
   } else {
     setListened(prev => [...prev, { ...entry, rating: null }]);
+  }
+
+  if (tracks.length) {
+    const cacheKey = `${form.artist}||${form.album}`;
+    setTrackCache(prev => {
+      const next = { ...prev, [cacheKey]: tracks };
+      persist(SK.tracks, next);
+      return next;
+    });
   }
 
   setAddModal(null);
@@ -1020,6 +1038,18 @@ useEffect(() => {
     const base = [...arr].sort((a,b) => {
       if (s === "year")   return a.year - b.year;
       if (s === "artist") return a.artist.localeCompare(b.artist);
+      const rawAvg = x => {
+        const songs = trackCache[x.artist+"||"+x.album] || [];
+        const vals = songs.map(s=>songRatings[x.artist+"||"+x.album+"||"+s]).filter(v=>v!=null);
+        return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+      };
+      if (s === "raw") {
+        const ar = rawAvg(a), br = rawAvg(b);
+        if (ar==null && br==null) return 0;
+        if (ar==null) return 1;
+        if (br==null) return -1;
+        return br-ar;
+      }
       if (a.rating==null && b.rating==null) return 0;
       if (a.rating==null) return 1;
       if (b.rating==null) return -1;
@@ -1040,9 +1070,22 @@ useEffect(() => {
     (listenFilter==="all" || a.genre===listenFilter) &&
     (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
   ));
-  if(heardSort==="artist") visibleListened=[...visibleListened].sort((a,b)=>a.artist.localeCompare(b.artist));
+  if(heardSort==="final") {
+    visibleListened = sortListened(listened.filter(a =>
+      (listenFilter==="all" || a.genre===listenFilter) &&
+      (`${a.artist} ${a.album}`).toLowerCase().includes(searchHeard.toLowerCase())
+    ));
+  } else if(heardSort==="artist") {
+    visibleListened=[...visibleListened].sort((a,b)=>a.artist.localeCompare(b.artist));
+  } else {
+    visibleListened = sortListened(listened.filter(a =>
+      (listenFilter==="all" || a.genre===listenFilter) &&
+      (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
+    ));
+  }
 
   const moveAlbumInTieGroup = (album, dir) => {
+    if(settings.listenSort!=="rating") return;
     setAlbumOrder(prev => reorderWithinTieGroup(visibleListened, prev, a => a.id, album.id, dir));
   };
 
@@ -1056,7 +1099,7 @@ useEffect(() => {
     .filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
     .filter(s=> top50RatingRange==="all" ? true : (top50RatingRange==="9" ? s.rating>=9 : (s.rating>=Number(top50RatingRange) && s.rating<Number(top50RatingRange)+1)))
     .sort((a,b)=>b.rating-a.rating);
-  const top50 = (top50RatingRange==="all" ? applyTieOrder(top50Base, songOrder, s => s.key).slice(0,50) : applyTieOrder(top50Base, songOrder, s => s.key));
+  const top50 = applyTieOrder(top50Base, songOrder, s => s.key);
 
   const moveSongInTieGroup = (song, dir) => {
     setSongOrder(prev => reorderWithinTieGroup(top50, prev, s => s.key, song.key, dir));
@@ -1065,114 +1108,24 @@ useEffect(() => {
   const ratedCount = listened.filter(a => a.rating!=null).length;
   const avg = ratedCount ? (listened.filter(a=>a.rating!=null).reduce((s,a)=>s+a.rating,0)/ratedCount).toFixed(1) : null;
   const compact = settings.compactMode;
-  const pad = compact ? "8px 11px" : "11px 13px";
+  const pad = compact ? (isMobile ? "7px 8px" : "8px 11px") : (isMobile ? "9px 9px" : "11px 13px");
 
   return (
-    <div style={{ minHeight:"100vh", background:theme.bg, color:theme.text, fontFamily:"system-ui,sans-serif", paddingBottom:60 }}>
+    <div style={{ minHeight:"100vh", background:theme.bg, color:theme.text, fontFamily:"system-ui,sans-serif", paddingBottom:60, maxWidth: isMobile ? "100%" : 980, margin:"0 auto" }}>
 
       {/* NAV */}
-      <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"16px 18px 0" }}>
+      <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:isMobile?"14px 12px 0":"16px 18px 0" }}>
         <div style={{ display:"flex", alignItems:"center", marginBottom:12 }}>
           <h1 style={{ margin:0, fontSize:18, fontWeight:800, color:theme.text, letterSpacing:"-0.3px", flex:1 }}>🎧 My Albums</h1>
-          <button
-  onClick={async () => {
-  const payload = {
-    want,
-    listened,
-    trackCache,
-    notes,
-    songRatings,
-    settings,
-    albumOrder,
-    songOrder,
-    deletedWant,
-    deletedListened,
-  };
-
-  const { error } = await supabase
-    .from("app_data")
-    .update({ data: payload })
-    .eq("id", 8);
-
-  if (error) {
-    alert("Cloud save failed");
-    console.error(error);
-  } else {
-    alert("Cloud save successful!");
-  }
-}}
-
-  style={{
-    background: theme.card,
-    border: `1px solid ${theme.border}`,
-    color: theme.muted,
-    borderRadius: 8,
-    padding: "5px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  }}
->
-  ☁ Save
-  
-</button>
-<button
-  onClick={async () => {
-    const { data, error } = await supabase
-      .from("app_data")
-      .select("data")
-      .eq("id", 8)
-      .single();
-
-    if (error) {
-      alert("Cloud load failed");
-      console.error(error);
-      return;
-    }
-
-const cloud = data.data;
-
-console.log("CLOUD WANT LENGTH:", cloud.want.length);
-console.log("LOCAL WANT LENGTH:", want.length);
-
-setWant(cloud.want || []);
-console.log("AFTER SET WANT");
-setListened(cloud.listened || []);
-setTrackCache(cloud.trackCache || {});
-setNotes(cloud.notes || {});
-setSongRatings(cloud.songRatings || {});
-setSettings(cloud.settings || settings);
-setAlbumOrder(cloud.albumOrder || []);
-setSongOrder(cloud.songOrder || []);
-setDeletedWant(cloud.deletedWant || []);
-setDeletedListened(cloud.deletedListened || []);
-
-setTab("heard");
-
-alert("Cloud data loaded!");
-  }}
-  style={{
-    background: theme.card,
-    border: `1px solid ${theme.border}`,
-    color: theme.muted,
-    borderRadius: 8,
-    padding: "5px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  }}
->
-  ☁ Load
-</button>
           <button onClick={() => setShowSettings(true)} style={{
             background:theme.card, border:`1px solid ${theme.border}`, color:theme.muted,
             borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12,
           }}>⚙️ Settings</button>
         </div>
         <div style={{ display:"flex", gap:0 }}>
-          {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([key,label]) => (
+          {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
-              padding:"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
+              padding:isMobile?"7px 8px":"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
               background:"transparent", color: tab===key ? theme.text : theme.muted,
               borderBottom: tab===key ? `2px solid ${theme.accent}` : "2px solid transparent",
             }}>{label}</button>
@@ -1183,7 +1136,7 @@ alert("Cloud data loaded!");
       {/* ══ TO-LISTEN ════════════════════════════════════════════════════════ */}
       {tab === "want" && (
         <>
-          <div style={{ padding:"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
+          <div style={{ padding:isMobile?"12px 12px 10px":"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
               <div style={{ flex:1, height:4, background:theme.card, borderRadius:2, overflow:"hidden" }}>
                 <div style={{ height:"100%", width:`${Math.round((want.filter(a=>a.done).length/Math.max(want.length,1))*100)}%`,
@@ -1198,21 +1151,20 @@ alert("Cloud data loaded!");
               }}>{hideDone ? "Show done" : "Hide done"}</button>
             } />
           </div>
-          <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
+
+          <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("want")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"center",
             }}>+ Add album</button>
             {visibleWant.map(a => {
   const c = GENRES[a.genre]?.color || "#888";
-  const albumPrefix = `${a.artist}||${a.album}||`;
-  const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
 
   return (
     <div key={a.id} style={{
       display:"flex",
       alignItems:"center",
-      gap:9,
+      gap:rowGap,
       padding:pad,
       background: a.done ? theme.surface : theme.card,
       borderRadius:9,
@@ -1228,8 +1180,8 @@ alert("Cloud data loaded!");
           src={a.cover}
           alt={a.album}
           style={{
-            width: 80,
-            height: 80,
+            width: coverSize,
+            height: coverSize,
             borderRadius: 8,
             objectFit: "cover",
             flexShrink: 0,
@@ -1307,15 +1259,6 @@ alert("Cloud data loaded!");
         )}
       </div>
 
-      {hasAlbumNotes && (
-        <span title="Has song notes" style={{
-          fontSize:12,
-          flexShrink:0
-        }}>
-          ✍️
-        </span>
-      )}
-
       <div style={{
         fontSize:10,
         padding:"2px 7px",
@@ -1365,19 +1308,19 @@ alert("Cloud data loaded!");
       {/* ══ RATED & RANKED ═══════════════════════════════════════════════════ */}
       {tab === "heard" && (
         <>
-          <div style={{ padding:"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
+          <div style={{ padding:isMobile?"12px 12px 10px":"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
             <div style={{ display:"flex", gap:14, marginBottom:10 }}>
               <span style={{ fontSize:12, color:theme.muted }}><span style={{ color:theme.text, fontWeight:700, fontSize:15 }}>{listened.length}</span> albums</span>
               <span style={{ fontSize:12, color:theme.muted }}><span style={{ color:theme.text, fontWeight:700, fontSize:15 }}>{ratedCount}</span> rated</span>
               {avg && <span style={{ fontSize:12, color:theme.muted }}>avg <span style={{ color:"#fbbf24", fontWeight:700, fontSize:15 }}>{avg}</span></span>}
             </div>
             <FilterBar items={listened} active={listenFilter} onSelect={setListenFilter} />
-            <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-            <select value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
+            <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{flex:"1 1 180px",minWidth:0,borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text,fontSize:16}} />
+            <select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{flex:"1 1 100px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
             </div>
           </div>
-          <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
+          <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("listened")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
@@ -1388,34 +1331,31 @@ alert("Cloud data loaded!");
             </p>
            {visibleListened.map((a, i) => {
   const c = GENRES[a.genre]?.color || "#888";
-  const rc = ratingColor(a.rating);
+  const rawVals=(trackCache[a.artist+"||"+a.album]||[]).map(ss=>songRatings[a.artist+"||"+a.album+"||"+ss]).filter(v=>v!=null); const rawAvg=rawVals.length?rawVals.reduce((x,y)=>x+y,0)/rawVals.length:null; const rc = ratingColor(settings.listenSort==="raw"?rawAvg:a.rating);
   const isEditing = editRatingId === a.id;
   const prev = visibleListened[i-1];
   const next = visibleListened[i+1];
   const canUp   = settings.listenSort==="rating" && a.rating!=null && prev && prev.rating === a.rating;
   const canDown = settings.listenSort==="rating" && a.rating!=null && next && next.rating === a.rating;
-  const albumPrefix = `${a.artist}||${a.album}||`;
-  const hasAlbumNotes = Object.keys(notes).some(k => k.startsWith(albumPrefix) && notes[k]);
-
   return (
     <div key={a.id} style={{
       display:"flex",
       alignItems:"center",
-      gap:8,
+      gap:rowGap,
       padding:pad,
       background:theme.card,
       borderRadius:9,
       border:`1px solid ${theme.border}`,
     }}>
       <div style={{
-        width:22,
+        width:isMobile?16:22,
         textAlign:"right",
         fontSize:11,
-        color:a.rating!=null ? theme.muted : theme.border,
+        color:(settings.listenSort==="raw" ? rawAvg!=null : a.rating!=null) ? theme.muted : theme.border,
         flexShrink:0,
         fontWeight:700
       }}>
-        {settings.listenSort==="rating" && a.rating!=null ? i+1 : "—"}
+        {(settings.listenSort==="raw" ? rawAvg!=null : a.rating!=null) ? i+1 : "—"}
       </div>
 
       <ReorderArrows
@@ -1431,8 +1371,8 @@ alert("Cloud data loaded!");
           src={a.cover}
           alt={a.album}
           style={{
-            width:80,
-            height:80,
+            width:coverSize,
+            height:coverSize,
             borderRadius:8,
             objectFit:"cover",
             flexShrink:0,
@@ -1463,15 +1403,6 @@ alert("Cloud data loaded!");
         )}
       </div>
 
-      {hasAlbumNotes && (
-        <span title="Has song notes" style={{
-          fontSize:12,
-          flexShrink:0
-        }}>
-          ✍️
-        </span>
-      )}
-
       <div style={{
         fontSize:10,
         padding:"2px 7px",
@@ -1496,13 +1427,13 @@ alert("Cloud data loaded!");
           }}
           placeholder="0–10"
           style={{
-            width:50,
+            width:56,
             padding:"4px 5px",
             borderRadius:6,
             border:`1px solid ${rc}`,
             background:theme.bg,
             color:theme.text,
-            fontSize:13,
+            fontSize:16,
             fontWeight:700,
             textAlign:"center",
             outline:"none"
@@ -1529,7 +1460,7 @@ alert("Cloud data loaded!");
             flexShrink:0,
           }}
         >
-          {a.rating!=null ? a.rating.toFixed(1) : "+"}
+          {settings.listenSort==="raw" ? (()=>{const songs=trackCache[a.artist+"||"+a.album]||[]; const vals=songs.map(s=>songRatings[a.artist+"||"+a.album+"||"+s]).filter(v=>v!=null); return vals.length? (vals.reduce((x,y)=>x+y,0)/vals.length).toFixed(2):"+";})() : (a.rating!=null ? a.rating.toFixed(1) : "+")}
         </div>
       )}
 
@@ -1567,13 +1498,13 @@ alert("Cloud data loaded!");
           </div>
         </>
       )}
-      {/* ══ TOP 50 SONGS ═════════════════════════════════════════════════════ */}
+      {/* ══ SONG LEADERBOARD ═════════════════════════════════════════════════ */}
       {tab === "top50" && (
-        <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-<div style={{display:"flex",gap:12,marginBottom:14}}>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
+        <div style={{ padding:isMobile?"16px 12px":"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text,fontSize:16}} />
+<div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
 <option value="all">All Ratings</option>
 {Array.from({length:10},(_,i)=><option key={i} value={i}>{i===9?"9-10":`${i}-${i}.9`}</option>)}
 </select>
@@ -1609,10 +1540,10 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
               const canDown = nextS && nextS.rating === s.rating;
               return (
                 <div key={s.key} style={{
-                  display:"flex", alignItems:"center", gap:10, padding:pad,
+                  display:"flex", alignItems:"center", gap:isMobile?6:10, padding:pad,
                   background:theme.card, borderRadius:9, border:`1px solid ${theme.border}`,
                 }}>
-                  <div style={{ width:26, textAlign:"right", fontSize:i<3?16:12,
+                  <div style={{ width:isMobile?20:26, textAlign:"right", fontSize:i<3?16:12,
                     color: i===0?"#fbbf24":i===1?"#94a3b8":i===2?"#b45309":theme.muted,
                     fontWeight:800, flexShrink:0 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
@@ -1627,8 +1558,8 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
     src={albumObj.cover}
     alt={s.album}
     style={{
-      width:80,
-      height:80,
+      width:coverSize,
+      height:coverSize,
       borderRadius:8,
       objectFit:"cover",
       flexShrink:0,
@@ -1648,7 +1579,6 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
                       <div style={{ fontSize:16, fontWeight:700, color:theme.text }}>{s.song}</div>
                       <div style={{ fontSize:13, color:theme.muted, marginTop:1 }}>{s.artist} · {s.album}</div>
                     </div>
-                    {!!notes[s.key] && <span style={{ fontSize:11, flexShrink:0 }}>✍️</span>}
                   </div>
                   {albumObj && (
                     <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
@@ -1674,7 +1604,6 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
         <AlbumDetailModal
           album={detailAlbum} onClose={() => setDetailAlbum(null)}
           trackCache={trackCache} setTrackCache={setTrackCache}
-          notes={notes} setNotes={setNotes}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
         />
@@ -1683,7 +1612,6 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
         <div>{detailSong?.cover && <img src={detailSong.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
         <SongDetailModal
           song={detailSong} onClose={() => setDetailSong(null)}
-          notes={notes} setNotes={setNotes}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
         />
