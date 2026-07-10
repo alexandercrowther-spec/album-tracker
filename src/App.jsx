@@ -723,7 +723,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
       </div>
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
-        {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([k,l]) => (
+        {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
               width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.defaultTab===k ? theme.accent : theme.border}`,
@@ -1063,7 +1063,7 @@ useEffect(() => {
     .filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
     .filter(s=> top50RatingRange==="all" ? true : (top50RatingRange==="9" ? s.rating>=9 : (s.rating>=Number(top50RatingRange) && s.rating<Number(top50RatingRange)+1)))
     .sort((a,b)=>b.rating-a.rating);
-  const top50 = (top50RatingRange==="all" ? applyTieOrder(top50Base, songOrder, s => s.key).slice(0,50) : applyTieOrder(top50Base, songOrder, s => s.key));
+  const top50 = applyTieOrder(top50Base, songOrder, s => s.key);
 
   const moveSongInTieGroup = (song, dir) => {
     setSongOrder(prev => reorderWithinTieGroup(top50, prev, s => s.key, song.key, dir));
@@ -1081,103 +1081,13 @@ useEffect(() => {
       <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"16px 18px 0" }}>
         <div style={{ display:"flex", alignItems:"center", marginBottom:12 }}>
           <h1 style={{ margin:0, fontSize:18, fontWeight:800, color:theme.text, letterSpacing:"-0.3px", flex:1 }}>🎧 My Albums</h1>
-          <button
-  onClick={async () => {
-  const payload = {
-    want,
-    listened,
-    trackCache,
-    notes,
-    songRatings,
-    settings,
-    albumOrder,
-    songOrder,
-    deletedWant,
-    deletedListened,
-  };
-
-  const { error } = await supabase
-    .from("app_data")
-    .update({ data: payload })
-    .eq("id", 8);
-
-  if (error) {
-    alert("Cloud save failed");
-    console.error(error);
-  } else {
-    alert("Cloud save successful!");
-  }
-}}
-
-  style={{
-    background: theme.card,
-    border: `1px solid ${theme.border}`,
-    color: theme.muted,
-    borderRadius: 8,
-    padding: "5px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  }}
->
-  ☁ Save
-  
-</button>
-<button
-  onClick={async () => {
-    const { data, error } = await supabase
-      .from("app_data")
-      .select("data")
-      .eq("id", 8)
-      .single();
-
-    if (error) {
-      alert("Cloud load failed");
-      console.error(error);
-      return;
-    }
-
-const cloud = data.data;
-
-console.log("CLOUD WANT LENGTH:", cloud.want.length);
-console.log("LOCAL WANT LENGTH:", want.length);
-
-setWant(cloud.want || []);
-console.log("AFTER SET WANT");
-setListened(cloud.listened || []);
-setTrackCache(cloud.trackCache || {});
-setNotes(cloud.notes || {});
-setSongRatings(cloud.songRatings || {});
-setSettings(cloud.settings || settings);
-setAlbumOrder(cloud.albumOrder || []);
-setSongOrder(cloud.songOrder || []);
-setDeletedWant(cloud.deletedWant || []);
-setDeletedListened(cloud.deletedListened || []);
-
-setTab("heard");
-
-alert("Cloud data loaded!");
-  }}
-  style={{
-    background: theme.card,
-    border: `1px solid ${theme.border}`,
-    color: theme.muted,
-    borderRadius: 8,
-    padding: "5px 10px",
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  }}
->
-  ☁ Load
-</button>
           <button onClick={() => setShowSettings(true)} style={{
             background:theme.card, border:`1px solid ${theme.border}`, color:theme.muted,
             borderRadius:8, padding:"5px 10px", cursor:"pointer", fontSize:12,
           }}>⚙️ Settings</button>
         </div>
         <div style={{ display:"flex", gap:0 }}>
-          {[["heard","Rated & Ranked"],["top50","Top 50 Songs"]].map(([key,label]) => (
+          {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
               padding:"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
               background:"transparent", color: tab===key ? theme.text : theme.muted,
@@ -1575,7 +1485,7 @@ alert("Cloud data loaded!");
           </div>
         </>
       )}
-      {/* ══ TOP 50 SONGS ═════════════════════════════════════════════════════ */}
+      {/* ══ SONG LEADERBOARD ═════════════════════════════════════════════════ */}
       {tab === "top50" && (
         <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
 <div style={{display:"flex",gap:12,marginBottom:14}}>
