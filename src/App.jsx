@@ -210,6 +210,19 @@ function mergeWithSeed(seed, saved, deletedIds) {
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
+// ─── RESPONSIVE HELPER ────────────────────────────────────────────────────────
+function useIsMobile(breakpoint = 480) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth <= breakpoint : false
+  );
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth <= breakpoint);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 
 
 // ─── COLOUR HELPERS ───────────────────────────────────────────────────────────
@@ -346,7 +359,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
           <input type={type} value={form[key]}
             onChange={e => set(key, type==="number" ? parseInt(e.target.value)||"" : e.target.value)}
             style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-              borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none", boxSizing:"border-box" }}
+              borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
           />
         </div>
       ))}
@@ -354,7 +367,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
         <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13, outline:"none" }}>
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none" }}>
           {GENRE_KEYS.map(g => <option key={g} value={g}>{GENRES[g].label}</option>)}
         </select>
       </div>
@@ -367,7 +380,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
           onChange={e => set("cover", e.target.value)}
           placeholder="https://..."
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:13,
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16,
             outline:"none", boxSizing:"border-box" }}
         />
       </div>
@@ -597,7 +610,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, notes, se
                   onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); etAdd(); } }}
                   placeholder={`Track ${i + 1}`}
                   style={{ flex:1, background:theme.card, border:`1px solid ${theme.border}`,
-                    borderRadius:7, padding:"7px 10px", color:theme.text, fontSize:13,
+                    borderRadius:7, padding:"7px 10px", color:theme.text, fontSize:16,
                     outline:"none", boxSizing:"border-box" }}
                 />
                 <button onClick={() => etMove(t.id, -1)} disabled={i === 0} style={{
@@ -798,6 +811,9 @@ export default function App() {
     theme: "midnight", defaultTab: "want", listenSort: "rating", compactMode: false,
   }));
   const theme = THEMES[settings.theme] || THEMES.midnight;
+  const isMobile = useIsMobile();
+  const coverSize = isMobile ? 46 : 80;
+  const rowGap = isMobile ? 6 : 9;
 
   const [tab, setTab] = useState(settings.defaultTab || "want");
 
@@ -1072,13 +1088,13 @@ useEffect(() => {
   const ratedCount = listened.filter(a => a.rating!=null).length;
   const avg = ratedCount ? (listened.filter(a=>a.rating!=null).reduce((s,a)=>s+a.rating,0)/ratedCount).toFixed(1) : null;
   const compact = settings.compactMode;
-  const pad = compact ? "8px 11px" : "11px 13px";
+  const pad = compact ? (isMobile ? "7px 8px" : "8px 11px") : (isMobile ? "9px 9px" : "11px 13px");
 
   return (
     <div style={{ minHeight:"100vh", background:theme.bg, color:theme.text, fontFamily:"system-ui,sans-serif", paddingBottom:60 }}>
 
       {/* NAV */}
-      <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:"16px 18px 0" }}>
+      <div style={{ background:theme.surface, borderBottom:`1px solid ${theme.border}`, padding:isMobile?"14px 12px 0":"16px 18px 0" }}>
         <div style={{ display:"flex", alignItems:"center", marginBottom:12 }}>
           <h1 style={{ margin:0, fontSize:18, fontWeight:800, color:theme.text, letterSpacing:"-0.3px", flex:1 }}>🎧 My Albums</h1>
           <button onClick={() => setShowSettings(true)} style={{
@@ -1089,7 +1105,7 @@ useEffect(() => {
         <div style={{ display:"flex", gap:0 }}>
           {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
-              padding:"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
+              padding:isMobile?"7px 8px":"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
               background:"transparent", color: tab===key ? theme.text : theme.muted,
               borderBottom: tab===key ? `2px solid ${theme.accent}` : "2px solid transparent",
             }}>{label}</button>
@@ -1100,7 +1116,7 @@ useEffect(() => {
       {/* ══ TO-LISTEN ════════════════════════════════════════════════════════ */}
       {tab === "want" && (
         <>
-          <div style={{ padding:"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
+          <div style={{ padding:isMobile?"12px 12px 10px":"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
               <div style={{ flex:1, height:4, background:theme.card, borderRadius:2, overflow:"hidden" }}>
                 <div style={{ height:"100%", width:`${Math.round((want.filter(a=>a.done).length/Math.max(want.length,1))*100)}%`,
@@ -1116,7 +1132,7 @@ useEffect(() => {
             } />
           </div>
 
-          <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
+          <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("want")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"center",
@@ -1130,7 +1146,7 @@ useEffect(() => {
     <div key={a.id} style={{
       display:"flex",
       alignItems:"center",
-      gap:9,
+      gap:rowGap,
       padding:pad,
       background: a.done ? theme.surface : theme.card,
       borderRadius:9,
@@ -1146,8 +1162,8 @@ useEffect(() => {
           src={a.cover}
           alt={a.album}
           style={{
-            width: 80,
-            height: 80,
+            width: coverSize,
+            height: coverSize,
             borderRadius: 8,
             objectFit: "cover",
             flexShrink: 0,
@@ -1283,7 +1299,7 @@ useEffect(() => {
       {/* ══ RATED & RANKED ═══════════════════════════════════════════════════ */}
       {tab === "heard" && (
         <>
-          <div style={{ padding:"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
+          <div style={{ padding:isMobile?"12px 12px 10px":"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
             <div style={{ display:"flex", gap:14, marginBottom:10 }}>
               <span style={{ fontSize:12, color:theme.muted }}><span style={{ color:theme.text, fontWeight:700, fontSize:15 }}>{listened.length}</span> albums</span>
               <span style={{ fontSize:12, color:theme.muted }}><span style={{ color:theme.text, fontWeight:700, fontSize:15 }}>{ratedCount}</span> rated</span>
@@ -1291,11 +1307,11 @@ useEffect(() => {
             </div>
             <FilterBar items={listened} active={listenFilter} onSelect={setListenFilter} />
             <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
-            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{flex:"1 1 180px",minWidth:0,borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-            <select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{flex:"1 1 100px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
+            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{flex:"1 1 180px",minWidth:0,borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text,fontSize:16}} />
+            <select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{flex:"1 1 100px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
             </div>
           </div>
-          <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
+          <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("listened")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
@@ -1319,14 +1335,14 @@ useEffect(() => {
     <div key={a.id} style={{
       display:"flex",
       alignItems:"center",
-      gap:8,
+      gap:rowGap,
       padding:pad,
       background:theme.card,
       borderRadius:9,
       border:`1px solid ${theme.border}`,
     }}>
       <div style={{
-        width:22,
+        width:isMobile?16:22,
         textAlign:"right",
         fontSize:11,
         color:a.rating!=null ? theme.muted : theme.border,
@@ -1349,8 +1365,8 @@ useEffect(() => {
           src={a.cover}
           alt={a.album}
           style={{
-            width:80,
-            height:80,
+            width:coverSize,
+            height:coverSize,
             borderRadius:8,
             objectFit:"cover",
             flexShrink:0,
@@ -1414,13 +1430,13 @@ useEffect(() => {
           }}
           placeholder="0–10"
           style={{
-            width:50,
+            width:56,
             padding:"4px 5px",
             borderRadius:6,
             border:`1px solid ${rc}`,
             background:theme.bg,
             color:theme.text,
-            fontSize:13,
+            fontSize:16,
             fontWeight:700,
             textAlign:"center",
             outline:"none"
@@ -1487,11 +1503,11 @@ useEffect(() => {
       )}
       {/* ══ SONG LEADERBOARD ═════════════════════════════════════════════════ */}
       {tab === "top50" && (
-        <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
+        <div style={{ padding:isMobile?"16px 12px":"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text,fontSize:16}} />
 <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
-<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
-<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)",fontSize:16}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
 <option value="all">All Ratings</option>
 {Array.from({length:10},(_,i)=><option key={i} value={i}>{i===9?"9-10":`${i}-${i}.9`}</option>)}
 </select>
@@ -1527,10 +1543,10 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
               const canDown = nextS && nextS.rating === s.rating;
               return (
                 <div key={s.key} style={{
-                  display:"flex", alignItems:"center", gap:10, padding:pad,
+                  display:"flex", alignItems:"center", gap:isMobile?6:10, padding:pad,
                   background:theme.card, borderRadius:9, border:`1px solid ${theme.border}`,
                 }}>
-                  <div style={{ width:26, textAlign:"right", fontSize:i<3?16:12,
+                  <div style={{ width:isMobile?20:26, textAlign:"right", fontSize:i<3?16:12,
                     color: i===0?"#fbbf24":i===1?"#94a3b8":i===2?"#b45309":theme.muted,
                     fontWeight:800, flexShrink:0 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
@@ -1545,8 +1561,8 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
     src={albumObj.cover}
     alt={s.album}
     style={{
-      width:80,
-      height:80,
+      width:coverSize,
+      height:coverSize,
       borderRadius:8,
       objectFit:"cover",
       flexShrink:0,
