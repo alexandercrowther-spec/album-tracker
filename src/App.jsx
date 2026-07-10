@@ -732,25 +732,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
             <span style={{ fontSize:13, color:theme.text }}>{l}</span>
           </label>
         ))}
-      </div>
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Sort listened by</div>
-        {[["rating","Rating (highest first)"],["year","Year"],["artist","Artist A→Z"]].map(([k,l]) => (
-          <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
-            <div style={{
-              width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.listenSort===k ? theme.accent : theme.border}`,
-              background: settings.listenSort===k ? theme.accent : "transparent", flexShrink:0,
-            }} onClick={() => set("listenSort", k)} />
-            <span style={{ fontSize:13, color:theme.text }}>{l}</span>
-          </label>
-        ))}
-        {settings.listenSort === "rating" && (
-          <p style={{ margin:"6px 0 0", fontSize:13, color:theme.muted }}>
-            Albums with the same rating can be reordered with ▲▼ on the Rated & Ranked tab.
-          </p>
-        )}
-      </div>
-      <div>
+      </div><div>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Display</div>
         <label style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
           <div style={{
@@ -840,7 +822,7 @@ export default function App() {
   const [top50Genre,setTop50Genre]=useState("all");
 const [top50RatingRange,setTop50RatingRange]=useState("all");
   const [wantSort,setWantSort]=useState("default");
-  const [heardSort,setHeardSort]=useState("default");
+  const [heardSort,setHeardSort]=useState(settings.listenSort==="rating"?"final":"default");
   const [hideDone, setHideDone]         = useState(false);
   const [editRatingId, setEditRatingId] = useState(null);
   const [editRatingVal, setEditRatingVal] = useState("");
@@ -1020,6 +1002,18 @@ useEffect(() => {
     const base = [...arr].sort((a,b) => {
       if (s === "year")   return a.year - b.year;
       if (s === "artist") return a.artist.localeCompare(b.artist);
+      const rawAvg = x => {
+        const songs = trackCache[x.artist+"||"+x.album] || [];
+        const vals = songs.map(s=>songRatings[x.artist+"||"+x.album+"||"+s]).filter(v=>v!=null);
+        return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+      };
+      if (s === "raw") {
+        const ar = rawAvg(a), br = rawAvg(b);
+        if (ar==null && br==null) return 0;
+        if (ar==null) return 1;
+        if (br==null) return -1;
+        return br-ar;
+      }
       if (a.rating==null && b.rating==null) return 0;
       if (a.rating==null) return 1;
       if (b.rating==null) return -1;
@@ -1040,9 +1034,22 @@ useEffect(() => {
     (listenFilter==="all" || a.genre===listenFilter) &&
     (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
   ));
-  if(heardSort==="artist") visibleListened=[...visibleListened].sort((a,b)=>a.artist.localeCompare(b.artist));
+  if(heardSort==="final") {
+    visibleListened = sortListened(listened.filter(a =>
+      (listenFilter==="all" || a.genre===listenFilter) &&
+      (`${a.artist} ${a.album}`).toLowerCase().includes(searchHeard.toLowerCase())
+    ));
+  } else if(heardSort==="artist") {
+    visibleListened=[...visibleListened].sort((a,b)=>a.artist.localeCompare(b.artist));
+  } else {
+    visibleListened = sortListened(listened.filter(a =>
+      (listenFilter==="all" || a.genre===listenFilter) &&
+      (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
+    ));
+  }
 
   const moveAlbumInTieGroup = (album, dir) => {
+    if(settings.listenSort!=="rating") return;
     setAlbumOrder(prev => reorderWithinTieGroup(visibleListened, prev, a => a.id, album.id, dir));
   };
 
@@ -1198,6 +1205,7 @@ alert("Cloud data loaded!");
               }}>{hideDone ? "Show done" : "Hide done"}</button>
             } />
           </div>
+
           <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
             <button onClick={() => setAddModal("want")} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
@@ -1374,7 +1382,7 @@ alert("Cloud data loaded!");
             <FilterBar items={listened} active={listenFilter} onSelect={setListenFilter} />
             <div style={{display:"flex",gap:8,marginTop:8}}>
             <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-            <select value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
+            <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
             </div>
           </div>
           <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
@@ -1388,7 +1396,7 @@ alert("Cloud data loaded!");
             </p>
            {visibleListened.map((a, i) => {
   const c = GENRES[a.genre]?.color || "#888";
-  const rc = ratingColor(a.rating);
+  const rawVals=(trackCache[a.artist+"||"+a.album]||[]).map(ss=>songRatings[a.artist+"||"+a.album+"||"+ss]).filter(v=>v!=null); const rawAvg=rawVals.length?rawVals.reduce((x,y)=>x+y,0)/rawVals.length:null; const rc = ratingColor(settings.listenSort==="raw"?rawAvg:a.rating);
   const isEditing = editRatingId === a.id;
   const prev = visibleListened[i-1];
   const next = visibleListened[i+1];
@@ -1529,7 +1537,7 @@ alert("Cloud data loaded!");
             flexShrink:0,
           }}
         >
-          {a.rating!=null ? a.rating.toFixed(1) : "+"}
+          {settings.listenSort==="raw" ? (()=>{const songs=trackCache[a.artist+"||"+a.album]||[]; const vals=songs.map(s=>songRatings[a.artist+"||"+a.album+"||"+s]).filter(v=>v!=null); return vals.length? (vals.reduce((x,y)=>x+y,0)/vals.length).toFixed(2):"+";})() : (a.rating!=null ? a.rating.toFixed(1) : "+")}
         </div>
       )}
 
