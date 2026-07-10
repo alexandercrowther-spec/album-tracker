@@ -1290,9 +1290,9 @@ useEffect(() => {
               {avg && <span style={{ fontSize:12, color:theme.muted }}>avg <span style={{ color:"#fbbf24", fontWeight:700, fontSize:15 }}>{avg}</span></span>}
             </div>
             <FilterBar items={listened} active={listenFilter} onSelect={setListenFilter} />
-            <div style={{display:"flex",gap:8,marginTop:8}}>
-            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-            <select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
+            <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+            <input placeholder="Search albums or artists..." value={searchHeard} onChange={e=>setSearchHeard(e.target.value)} style={{flex:"1 1 180px",minWidth:0,borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
+            <select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={settings.listenSort} onChange={e=>{setSettings(p=>{const n={...p, listenSort:e.target.value}; persist(SK.settings, n); return n;}); setHeardSort("default");}}><option value="rating">Final Rating</option><option value="raw">Raw Average</option></select><select style={{flex:"1 1 100px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={heardSort} onChange={e=>setHeardSort(e.target.value)}><option value="default">Sort</option><option value="artist">Artist</option></select>
             </div>
           </div>
           <div style={{ padding:"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
@@ -1488,10 +1488,10 @@ useEffect(() => {
       {/* ══ SONG LEADERBOARD ═════════════════════════════════════════════════ */}
       {tab === "top50" && (
         <div style={{ padding:"16px 18px" }}><input placeholder="Search songs, albums, artists..." value={searchTop50} onChange={e=>setSearchTop50(e.target.value)} style={{marginBottom:10,width:"100%",borderRadius:999,padding:"10px 14px",border:`1px solid ${theme.border}`,background:theme.surface,color:theme.text}} />
-<div style={{display:"flex",gap:12,marginBottom:14}}>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
-<select style={{padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
+<div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Artist} onChange={e=>setTop50Artist(e.target.value)}><option value="all">All Artists</option>{[...new Set(top50.map(s=>s.artist))].sort().map(a=><option key={a} value={a}>{a}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50Genre} onChange={e=>setTop50Genre(e.target.value)}><option value="all">All Genres</option>{GENRE_KEYS.map(g=><option key={g} value={g}>{GENRES[g].label}</option>)}</select>
+<select style={{flex:"1 1 130px",minWidth:0,padding:"10px 14px",borderRadius:999,background:theme.surface,color:theme.text,border:`1px solid ${theme.border}`,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}} value={top50RatingRange} onChange={e=>setTop50RatingRange(e.target.value)}>
 <option value="all">All Ratings</option>
 {Array.from({length:10},(_,i)=><option key={i} value={i}>{i===9?"9-10":`${i}-${i}.9`}</option>)}
 </select>
