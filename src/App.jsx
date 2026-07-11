@@ -516,7 +516,133 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose, on
 }
 
 // ─── ALBUM DETAIL MODAL ──────────────────────────────────────────────────────
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist }) {
+// ─── CRITIC SCORE (AOTY) ─────────────────────────────────────────────────────
+function CriticScoreBlock({ album, onSetCriticScore, theme }) {
+  const [fetching, setFetching] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [manualVal, setManualVal] = useState("");
+  const [manualError, setManualError] = useState(null);
+
+  useEffect(() => {
+    if (album.criticScoreChecked) return;
+    let cancelled = false;
+    setFetching(true);
+    fetch(`/api/critic-score?artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`)
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return;
+        onSetCriticScore(album.id, data?.criticScore ?? null, data?.criticScore != null ? "aoty" : null);
+      })
+      .catch(() => {
+        if (!cancelled) onSetCriticScore(album.id, null, null);
+      })
+      .finally(() => { if (!cancelled) setFetching(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album.id]);
+
+  const saveManual = () => {
+    const num = parseFloat(manualVal);
+    if (isNaN(num) || num < 0 || num > 100) {
+      setManualError("Enter a score from 0–100 (AOTY's scale).");
+      return;
+    }
+    onSetCriticScore(album.id, Math.round(num), "manual");
+    setEditing(false);
+    setManualError(null);
+  };
+
+  const critic10 = album.criticScore != null ? album.criticScore / 10 : null;
+  const diff = (album.rating != null && critic10 != null) ? Math.round((album.rating - critic10) * 10) / 10 : null;
+
+  return (
+    <div style={{
+      display:"flex", flexDirection:"column", gap:8, margin:"0 0 14px",
+      padding:"10px 12px", background:theme.card, borderRadius:10, border:`1px solid ${theme.border}`,
+    }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <span style={{ fontSize:11, fontWeight:700, color:theme.muted, textTransform:"uppercase", letterSpacing:0.4 }}>
+          Critic score (AOTY)
+        </span>
+        {album.criticScore != null && !editing && (
+          <button onClick={() => { setManualVal(String(album.criticScore)); setEditing(true); }} style={{
+            background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:11, padding:0,
+          }}>✏️ edit</button>
+        )}
+      </div>
+
+      {fetching && !album.criticScoreChecked && (
+        <span style={{ fontSize:12, color:theme.muted }}>Checking AOTY…</span>
+      )}
+
+      {!fetching && album.criticScoreChecked && album.criticScore == null && !editing && (
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <span style={{ fontSize:12, color:theme.muted }}>No critic score found.</span>
+          <button onClick={() => { setManualVal(""); setEditing(true); }} style={{
+            background:"none", border:`1px solid ${theme.border}`, borderRadius:6,
+            color:theme.text, cursor:"pointer", fontSize:11, padding:"3px 8px",
+          }}>+ Enter manually</button>
+        </div>
+      )}
+
+      {editing && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          <div style={{ display:"flex", gap:6 }}>
+            <input
+              type="number" min="0" max="100" value={manualVal}
+              onChange={e => { setManualVal(e.target.value); setManualError(null); }}
+              placeholder="e.g. 84"
+              style={{
+                flex:1, background:theme.surface, border:`1px solid ${theme.border}`,
+                borderRadius:7, padding:"6px 9px", color:theme.text, fontSize:14, outline:"none", boxSizing:"border-box",
+              }}
+            />
+            <button onClick={saveManual} style={{
+              padding:"6px 12px", background:theme.accent, border:"none", borderRadius:7,
+              color:"#fff", fontWeight:700, fontSize:12, cursor:"pointer",
+            }}>Save</button>
+            <button onClick={() => { setEditing(false); setManualError(null); }} style={{
+              padding:"6px 10px", background:"none", border:`1px solid ${theme.border}`, borderRadius:7,
+              color:theme.muted, fontSize:12, cursor:"pointer",
+            }}>Cancel</button>
+          </div>
+          {manualError && <span style={{ fontSize:11, color:"#f87171" }}>{manualError}</span>}
+        </div>
+      )}
+
+      {!editing && album.criticScore != null && (
+        <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+          <div>
+            <div style={{ fontSize:10, color:theme.muted, marginBottom:2 }}>Your rating</div>
+            <div style={{ fontSize:18, fontWeight:800, color:theme.text }}>
+              {album.rating != null ? album.rating.toFixed(1) : "—"}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:theme.muted, marginBottom:2 }}>Critics</div>
+            <div style={{ fontSize:18, fontWeight:800, color:theme.text }}>
+              {critic10.toFixed(1)}
+              <span style={{ fontSize:10, color:theme.muted, fontWeight:400, marginLeft:4 }}>
+                ({album.criticScore}/100{album.criticScoreSource === "manual" ? ", manual" : ""})
+              </span>
+            </div>
+          </div>
+          {diff != null && (
+            <div style={{
+              marginLeft:"auto", fontSize:13, fontWeight:800, padding:"3px 9px", borderRadius:7,
+              color: diff >= 0 ? "#22c55e" : "#f87171",
+              background: diff >= 0 ? "#22c55e1e" : "#f871711e",
+            }}>
+              {diff > 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
   const [loading, setLoading] = useState(!tracks);
@@ -664,6 +790,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
             >{album.artist}</span> · {album.year}
           </div>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
+          <CriticScoreBlock album={album} onSetCriticScore={onSetCriticScore} theme={theme} />
           {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
@@ -1327,6 +1454,13 @@ useEffect(() => {
     setEditModal(null);
   };
 
+  const setCriticScore = (id, score, source) => {
+    setListened(prev => prev.map(a => a.id===id
+      ? { ...a, criticScore: score, criticScoreSource: source, criticScoreChecked: true }
+      : a
+    ));
+  };
+
   // PERMANENT delete — record ID in deletedListened so seed never re-adds it
   const handleDelete = (id) => {
     setListened(prev => prev.filter(a => a.id !== id));
@@ -1755,6 +1889,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
           onOpenArtist={name => openArtist(name)}
+          onSetCriticScore={setCriticScore}
         />
       </>) }
       {!detailAlbum && detailSong && (<>
