@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
+import { SEED_LISTENED } from "./seedData";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
   hiphop:           { label: "Hip-Hop", color: "#f87171" },
@@ -92,43 +93,6 @@ const GENRES = {
 const GENRE_KEYS = Object.keys(GENRES);
 
 
-// ─── SEED DATA ────────────────────────────────────────────────────────────────
-const SEED_LISTENED = [
-  { id:"l1",  artist:"Kendrick Lamar", album:"Overly Dedicated",                  year:2010, genre:"hiphop",  rating:null },
-  { id:"l2",  artist:"Kendrick Lamar", album:"Section.80",                        year:2011, genre:"hiphop",  rating:null },
-  { id:"l3",  artist:"Kendrick Lamar", album:"good kid, m.A.A.d city",            year:2012, genre:"hiphop",  rating:null },
-  { id:"l4",  artist:"Kendrick Lamar", album:"To Pimp a Butterfly",               year:2015, genre:"hiphop",  rating:null },
-  { id:"l5",  artist:"Kendrick Lamar", album:"untitled unmastered.",              year:2016, genre:"hiphop",  rating:null },
-  { id:"l6",  artist:"Kendrick Lamar", album:"DAMN.",                             year:2017, genre:"hiphop",  rating:null },
-  { id:"l7",  artist:"Kendrick Lamar", album:"Mr. Morale & the Big Steppers",     year:2022, genre:"hiphop",  rating:null },
-  { id:"l8",  artist:"Kendrick Lamar", album:"GNX",                               year:2024, genre:"hiphop",  rating:null },
-  { id:"l9",  artist:"Kanye West",     album:"The College Dropout",               year:2004, genre:"hiphop",  rating:null },
-  { id:"l10", artist:"Kanye West",     album:"Late Registration",                 year:2005, genre:"hiphop",  rating:null },
-  { id:"l11", artist:"Kanye West",     album:"Graduation",                        year:2007, genre:"hiphop",  rating:null },
-  { id:"l12", artist:"Kanye West",     album:"My Beautiful Dark Twisted Fantasy", year:2010, genre:"hiphop",  rating:null },
-  { id:"l13", artist:"J. Cole",        album:"2014 Forest Hills Drive",           year:2014, genre:"hiphop",  rating:null },
-  { id:"l14", artist:"J. Cole",        album:"For Your Eyez Only",                year:2016, genre:"hiphop",  rating:null },
-  { id:"l15", artist:"J. Cole",        album:"KOD",                               year:2018, genre:"hiphop",  rating:null },
-  { id:"l16", artist:"J. Cole",        album:"The Off-Season",                    year:2021, genre:"hiphop",  rating:null },
-  { id:"l17", artist:"J. Cole",        album:"The Fall Off",                      year:2025, genre:"hiphop",  rating:null },
-  { id:"l18", artist:"Freddie Gibbs & Madlib",        album:"Piñata",             year:2014, genre:"hiphop",  rating:null },
-  { id:"l19", artist:"Freddie Gibbs & The Alchemist", album:"Alfredo",            year:2020, genre:"hiphop",  rating:null },
-  { id:"l20", artist:"Freddie Gibbs & The Alchemist", album:"Alfredo 2",          year:2024, genre:"hiphop",  rating:null },
-  { id:"l21", artist:"Baby Keem",      album:"Ca$ino",                            year:2026, genre:"hiphop",  rating:null },
-  { id:"l22", artist:"Clipse",         album:"Let God Sort Em Out",               year:2025, genre:"hiphop",  rating:null },
-  { id:"l23", artist:"Fleetwood Mac",  album:"Rumours",                           year:1977, genre:"rock",    rating:null },
-  { id:"l24", artist:"Pink Floyd",     album:"The Dark Side of the Moon",         year:1973, genre:"rock",    rating:null },
-  { id:"l25", artist:"Radiohead",      album:"In Rainbows",                       year:2007, genre:"alternative", rating:null },
-  { id:"l26", artist:"Steely Dan",     album:"Aja",                               year:1977, genre:"jazz",    rating:null },
-  { id:"l27", artist:"The Strokes",    album:"Is This It",                        year:2001, genre:"indie",   rating:null },
-  { id:"l28", artist:"Jeff Buckley",   album:"Grace",                             year:1994, genre:"alternative", rating:null },
-  { id:"l29", artist:"JID",            album:"The Never Story",                   year:2017, genre:"hiphop",  rating:null },
-  { id:"l30", artist:"JID",            album:"DiCaprio 2",                        year:2018, genre:"hiphop",  rating:null },
-  { id:"l31", artist:"JID",            album:"The Forever Story",                 year:2022, genre:"hiphop",  rating:null },
-  { id:"l32", artist:"JID",            album:"Luv Is 4Ever",                      year:2024, genre:"hiphop",  rating:null },
-  { id:"l33", artist:"Joey Bada$$",    album:"1999",                              year:2012, genre:"hiphop",  rating:null },
-  { id:"l34", artist:"Common",         album:"Like Water for Chocolate",          year:2000, genre:"hiphop",  rating:null },
-];
 
 // ─── THEMES ───────────────────────────────────────────────────────────────────
 const THEMES = {
@@ -281,16 +245,63 @@ function applyTieOrder(sorted, order, keyOf) {
   return groups;
 }
 
+// Returns the [start, end] index range (inclusive) of the run of items
+// sharing sorted[idx]'s rating.
+function tieGroupBounds(sorted, idx) {
+  const rating = sorted[idx].__rating;
+  let start = idx;
+  while (start > 0 && sorted[start - 1].__rating === rating) start--;
+  let end = idx;
+  while (end < sorted.length - 1 && sorted[end + 1].__rating === rating) end++;
+  return [start, end];
+}
+
+// Whether this item shares its rating with at least one neighbor, i.e.
+// whether reordering is possible at all.
+function hasTieGroup(sorted, idx) {
+  if (idx < 0 || idx >= sorted.length || sorted[idx].__rating == null) return false;
+  const [start, end] = tieGroupBounds(sorted, idx);
+  return end > start;
+}
+
 function reorderWithinTieGroup(sorted, order, keyOf, key, dir) {
   const idx = sorted.findIndex(item => keyOf(item) === key);
   if (idx < 0) return order;
-  const swapIdx = idx + dir;
-  if (swapIdx < 0 || swapIdx >= sorted.length) return order;
-  if (sorted[swapIdx].__rating !== sorted[idx].__rating) return order;
+  const [start, end] = tieGroupBounds(sorted, idx);
+  if (start === end) return order; // not tied with anything, nothing to do
+
   const newOrderKeys = sorted.map(keyOf);
-  const a = newOrderKeys[idx], b = newOrderKeys[swapIdx];
-  newOrderKeys[idx] = b; newOrderKeys[swapIdx] = a;
+  const swapIdx = idx + dir;
+
+  if (swapIdx >= start && swapIdx <= end) {
+    // Still inside the tie group — plain adjacent swap, so repeated clicks
+    // walk the item through the tied entries one at a time (10 -> 11 -> 12...).
+    const a = newOrderKeys[idx], b = newOrderKeys[swapIdx];
+    newOrderKeys[idx] = b; newOrderKeys[swapIdx] = a;
+    return newOrderKeys;
+  }
+
+  // Hit the edge of the tie group (no more tied entries in this direction)
+  // — wrap around to the opposite end of the group instead of doing nothing,
+  // so an item pushed all the way down cycles back to where it started.
+  const [item] = newOrderKeys.splice(idx, 1);
+  const insertAt = dir > 0 ? start : end;
+  newOrderKeys.splice(insertAt, 0, item);
   return newOrderKeys;
+}
+
+// Reorders `key` within the subset of `fullSorted` matched by `scopeFilter`
+// (e.g. one artist's albums/songs), so tie-groups are local to that subset,
+// then merges the result back into the full ordering — every id outside the
+// scope keeps its exact existing position. Used by the artist page so ties
+// cascade/wrap through just that artist's own entries rather than the
+// whole app-wide list.
+function reorderScoped(fullSorted, keyOf, scopeFilter, key, dir) {
+  const scoped = fullSorted.filter(scopeFilter);
+  const newScopedKeys = reorderWithinTieGroup(scoped, scoped.map(keyOf), keyOf, key, dir);
+  const scopedKeySet = new Set(scoped.map(keyOf));
+  let si = 0;
+  return fullSorted.map(keyOf).map(k => scopedKeySet.has(k) ? newScopedKeys[si++] : k);
 }
 
 // ─── SHARED UI ───────────────────────────────────────────────────────────────
@@ -555,7 +566,7 @@ function summarizeCriticDebug(trace, error) {
   return lines.join("\n");
 }
 
-function CriticScoreBlock({ album, onSetCriticScore, theme }) {
+function CriticScoreBlock({ album, onSetCriticScore, theme, showDebugTools }) {
   const [fetching, setFetching] = useState(album.criticScore == null);
   const [editing, setEditing] = useState(false);
   const [manualVal, setManualVal] = useState("");
@@ -622,7 +633,7 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
               background:"none", border:`1px solid ${theme.border}`, borderRadius:6,
               color:theme.text, cursor:"pointer", fontSize:11, padding:"3px 8px",
             }}>+ Enter manually</button>
-            {debugInfo && (
+            {debugInfo && showDebugTools && (
               <button onClick={() => setShowDebug(s => !s)} style={{
                 background:"none", border:"none", color:theme.muted, textDecoration:"underline",
                 cursor:"pointer", fontSize:11, padding:0,
@@ -695,7 +706,7 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
   );
 }
 
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore }) {
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore, showDebugTools }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
   const [loading, setLoading] = useState(!tracks);
@@ -869,7 +880,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
             >{album.artist}</span> · {album.year}
           </div>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
-          <CriticScoreBlock album={album} onSetCriticScore={onSetCriticScore} theme={theme} />
+          <CriticScoreBlock album={album} onSetCriticScore={onSetCriticScore} theme={theme} showDebugTools={showDebugTools} />
           {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
           <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
@@ -916,7 +927,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
 }
 
 // ─── ARTIST DETAIL MODAL ─────────────────────────────────────────────────────
-function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum }) {
+function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum, albumOrder, setAlbumOrder, songOrder, setSongOrder }) {
   const listenedAlbums = listened.filter(a => a.artist === artist);
 
   const effectiveRating = a => {
@@ -928,13 +939,44 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
     return a.rating;
   };
 
-  const sortedListened = [...listenedAlbums].sort((a, b) => {
-    const ar = effectiveRating(a), br = effectiveRating(b);
-    if (ar == null && br == null) return 0;
-    if (ar == null) return 1;
-    if (br == null) return -1;
-    return br - ar;
-  });
+  // Reordering ties only makes sense against the persisted `rating` field
+  // (same gating the Rated & Ranked tab uses) — "raw average" is derived
+  // and can't be manually tie-broken.
+  const canReorderAlbums = settings.listenSort === "rating";
+
+  // Full rating-sorted + tie-ordered album list across ALL artists (mirrors
+  // the Heard tab), used only to compute correct tie-group edges — display
+  // is filtered down to this artist below.
+  const globalSortedAlbums = (() => {
+    const base = [...listened].sort((a, b) => {
+      if (a.rating == null && b.rating == null) return 0;
+      if (a.rating == null) return 1;
+      if (b.rating == null) return -1;
+      return b.rating - a.rating;
+    });
+    if (!canReorderAlbums) return base;
+    const tagged = base.map(a => ({ ...a, __rating: a.rating }));
+    return applyTieOrder(tagged, albumOrder, a => a.id);
+  })();
+
+  const artistScopedAlbums = canReorderAlbums
+    ? globalSortedAlbums.filter(a => a.artist === artist)
+    : null;
+
+  const sortedListened = canReorderAlbums
+    ? artistScopedAlbums
+    : [...listenedAlbums].sort((a, b) => {
+        const ar = effectiveRating(a), br = effectiveRating(b);
+        if (ar == null && br == null) return 0;
+        if (ar == null) return 1;
+        if (br == null) return -1;
+        return br - ar;
+      });
+
+  const moveAlbumInTieGroup = (album, dir) => {
+    if (!canReorderAlbums) return;
+    setAlbumOrder(() => reorderScoped(globalSortedAlbums, a => a.id, a => a.artist === artist, album.id, dir));
+  };
 
   const ratedVals = sortedListened.map(effectiveRating).filter(v => v != null);
   const artistAvg = ratedVals.length ? (ratedVals.reduce((x, y) => x + y, 0) / ratedVals.length) : null;
@@ -942,14 +984,26 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
 
   const cover = listenedAlbums.find(a => a.cover)?.cover;
 
-  const topSongs = Object.entries(songRatings)
-    .filter(([k, r]) => r != null && k.startsWith(artist + "||"))
-    .map(([key, rating]) => {
-      const parts = key.split("||");
-      return { key, album: parts[1], song: parts[2], rating };
-    })
-    .sort((a, b) => b.rating - a.rating)
-    .slice(0, 10);
+  // Full rating-sorted + tie-ordered list of every rated song across ALL
+  // artists (mirrors the Song Leaderboard tab, minus its UI filters), used
+  // to compute correct tie-group edges before filtering to this artist.
+  const allSongsOrdered = (() => {
+    const base = Object.entries(songRatings)
+      .filter(([, r]) => r != null)
+      .map(([key, rating]) => {
+        const parts = key.split("||");
+        return { key, artist: parts[0], album: parts[1], song: parts[2], rating, __rating: rating };
+      })
+      .sort((a, b) => b.rating - a.rating);
+    return applyTieOrder(base, songOrder, s => s.key);
+  })();
+
+  const artistScopedSongs = allSongsOrdered.filter(s => s.artist === artist);
+  const topSongs = artistScopedSongs.slice(0, 10);
+
+  const moveSongInTieGroup = (song, dir) => {
+    setSongOrder(() => reorderScoped(allSongsOrdered, s => s.key, s => s.artist === artist, song.key, dir));
+  };
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
@@ -986,14 +1040,22 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
               const c = GENRES[a.genre]?.color || "#888";
               const rating = effectiveRating(a);
               const rc = ratingColor(rating);
+              const canReorderRow = canReorderAlbums && rating != null && hasTieGroup(artistScopedAlbums, i);
               return (
-                <div key={a.id} onClick={() => onOpenAlbum(a)} style={{
-                  display:"flex", alignItems:"center", gap:10, padding:"8px 10px", cursor:"pointer",
+                <div key={a.id} style={{
+                  display:"flex", alignItems:"center", gap:10, padding:"8px 10px",
                   background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
                 }}>
                   <div style={{ width:20, textAlign:"right", fontSize:11, color: rating!=null ? theme.muted : theme.border, fontWeight:700, flexShrink:0 }}>
                     {rating != null ? i + 1 : "—"}
                   </div>
+                  <ReorderArrows
+                    canUp={canReorderRow} canDown={canReorderRow}
+                    onUp={() => moveAlbumInTieGroup(a, -1)}
+                    onDown={() => moveAlbumInTieGroup(a, 1)}
+                    theme={theme}
+                  />
+                  <div onClick={() => onOpenAlbum(a)} style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0, cursor:"pointer" }}>
                   {a.cover && <img src={a.cover} alt={a.album} style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{a.album}</div>
@@ -1012,6 +1074,7 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
                   }}>
                     {rating != null ? rating.toFixed(1) : "+"}
                   </div>
+                  </div>
                 </div>
               );
             })}
@@ -1027,12 +1090,19 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
             {topSongs.map((s, i) => {
               const rc = ratingColor(s.rating);
+              const canReorderSongRow = hasTieGroup(artistScopedSongs, i);
               return (
                 <div key={s.key} style={{
                   display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
                   background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
                 }}>
                   <div style={{ width:16, textAlign:"right", fontSize:11, color:theme.muted, fontWeight:700, flexShrink:0 }}>{i + 1}</div>
+                  <ReorderArrows
+                    canUp={canReorderSongRow} canDown={canReorderSongRow}
+                    onUp={() => moveSongInTieGroup(s, -1)}
+                    onDown={() => moveSongInTieGroup(s, 1)}
+                    theme={theme}
+                  />
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:theme.text }}>{s.song}</div>
                     <div style={{ fontSize:11, color:theme.muted }}>{s.album}</div>
@@ -1143,6 +1213,13 @@ function SettingsModal({ settings, setSettings, onClose, theme, backupData, onIm
           }} onClick={() => set("compactMode", !settings.compactMode)} />
           <span style={{ fontSize:13, color:theme.text }}>Compact mode</span>
         </label>
+        <label style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
+          <div style={{
+            width:16, height:16, borderRadius:3, border:`2px solid ${settings.showCriticDebug !== false ? theme.accent : theme.border}`,
+            background: settings.showCriticDebug !== false ? theme.accent : "transparent", flexShrink:0,
+          }} onClick={() => set("showCriticDebug", settings.showCriticDebug === false)} />
+          <span style={{ fontSize:13, color:theme.text }}>Show "why?" critic-score debug details</span>
+        </label>
       </div>
       <div>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Backup</div>
@@ -1191,17 +1268,65 @@ function ConfirmModal({ message, subMessage, onConfirm, onClose, theme, dangerou
   );
 }
 
+// Strip accents, "(Deluxe Edition)"/"[Remastered]"-style suffixes, and
+// punctuation so titles compare on their actual words rather than exact
+// formatting, which iTunes is inconsistent about.
+function normalizeTitle(s) {
+  return (s || "")
+    .toLowerCase()
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/\(.*?\)|\[.*?\]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+// 0-1 similarity score between two already-normalized strings.
+function titleSimilarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.75;
+  const aTokens = new Set(a.split(" ").filter(Boolean));
+  const bTokens = new Set(b.split(" ").filter(Boolean));
+  if (!aTokens.size || !bTokens.size) return 0;
+  let overlap = 0;
+  aTokens.forEach(t => { if (bTokens.has(t)) overlap++; });
+  return overlap / Math.max(aTokens.size, bTokens.size);
+}
+
+// iTunes' search ranking often isn't an exact-title match — for artists
+// with many releases it'll happily return a deluxe reissue, a "best of"
+// compilation, or occasionally a different artist entirely as result #1.
+// Score every candidate against the artist/album we actually asked for
+// and take the best match instead of trusting position 0.
+function pickBestAlbumMatch(results, artist, album) {
+  const targetArtist = normalizeTitle(artist);
+  const targetAlbum = normalizeTitle(album);
+  let best = null, bestScore = -1;
+  for (const r of results) {
+    if (!r.collectionName) continue;
+    const artistScore = titleSimilarity(normalizeTitle(r.artistName), targetArtist);
+    const albumScore = titleSimilarity(normalizeTitle(r.collectionName), targetAlbum);
+    // Require some minimum artist relevance so a same-titled album by a
+    // different artist can't outscore the real one on title match alone.
+    if (artistScore < 0.4) continue;
+    const score = albumScore * 2 + artistScore;
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return best || results[0] || null;
+}
+
 async function getAlbumInfo(artist, album) {
   try {
     const q = encodeURIComponent(`${artist} ${album}`);
     const res = await fetch(
-      `https://itunes.apple.com/search?term=${q}&entity=album&limit=1`
+      `https://itunes.apple.com/search?term=${q}&entity=album&limit=25`
     );
     const data = await res.json();
 
     if (!data.results?.length) return { cover: null, tracks: [] };
 
-    const result = data.results[0];
+    const result = pickBestAlbumMatch(data.results, artist, album);
+    if (!result) return { cover: null, tracks: [] };
     const cover = result.artworkUrl100
       ? result.artworkUrl100.replace("100x100bb", "600x600bb")
       : null;
@@ -1537,6 +1662,7 @@ export default function App() {
 
   const [settings, setSettings] = useState(() => loadLS(SK.settings, {
     theme: "midnight", defaultTab: "heard", listenSort: "rating", compactMode: false,
+    showCriticDebug: true,
   }));
   const theme = THEMES[settings.theme] || THEMES.midnight;
   const isMobile = useIsMobile();
@@ -1941,10 +2067,9 @@ useEffect(() => {
   const c = GENRES[a.genre]?.color || "#888";
   const rawVals=(trackCache[a.artist+"||"+a.album]||[]).map(ss=>songRatings[a.artist+"||"+a.album+"||"+ss]).filter(v=>v!=null); const rawAvg=rawVals.length?rawVals.reduce((x,y)=>x+y,0)/rawVals.length:null; const rc = ratingColor(settings.listenSort==="raw"?rawAvg:a.rating);
   const isEditing = editRatingId === a.id;
-  const prev = visibleListened[i-1];
-  const next = visibleListened[i+1];
-  const canUp   = settings.listenSort==="rating" && a.rating!=null && prev && prev.rating === a.rating;
-  const canDown = settings.listenSort==="rating" && a.rating!=null && next && next.rating === a.rating;
+  const canReorder = settings.listenSort==="rating" && a.rating!=null && hasTieGroup(visibleListened, i);
+  const canUp   = canReorder;
+  const canDown = canReorder;
   return (
     <div key={a.id} style={{
       display:"flex",
@@ -2144,10 +2269,9 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album);
               const c = albumObj ? GENRES[albumObj.genre]?.color || "#888" : "#888";
-              const prevS = top50[i-1];
-              const nextS = top50[i+1];
-              const canUp   = prevS && prevS.rating === s.rating;
-              const canDown = nextS && nextS.rating === s.rating;
+              const canReorderSong = hasTieGroup(top50, i);
+              const canUp   = canReorderSong;
+              const canDown = canReorderSong;
               return (
                 <div key={s.key} style={{
                   display:"flex", alignItems:"center", gap:isMobile?6:10, padding:pad,
@@ -2229,6 +2353,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           theme={theme}
           onOpenArtist={name => openArtist(name)}
           onSetCriticScore={setCriticScore}
+          showDebugTools={settings.showCriticDebug !== false}
         />
       </>) }
       {!detailAlbum && detailSong && (<>
@@ -2246,6 +2371,8 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           trackCache={trackCache} songRatings={songRatings}
           settings={settings} theme={theme}
           onOpenAlbum={(album) => openAlbum(album)}
+          albumOrder={albumOrder} setAlbumOrder={setAlbumOrder}
+          songOrder={songOrder} setSongOrder={setSongOrder}
         />
       )}
       {addModal && (
