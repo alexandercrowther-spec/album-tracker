@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
@@ -129,51 +130,6 @@ const SEED_LISTENED = [
   { id:"l34", artist:"Common",         album:"Like Water for Chocolate",          year:2000, genre:"hiphop",  rating:null },
 ];
 
-const SEED_WANT = [
-  { id:"w1",  artist:"The Strokes",    album:"Room on Fire",                          year:2003, genre:"indie",    done:false, priority:1 },
-  { id:"w2",  artist:"The Strokes",    album:"First Impressions of Earth",            year:2006, genre:"indie",    done:false, priority:2 },
-  { id:"w3",  artist:"The Strokes",    album:"The New Abnormal",                      year:2020, genre:"indie",    done:false, priority:3 },
-  { id:"w4",  artist:"Fleetwood Mac",  album:"Fleetwood Mac",                         year:1975, genre:"rock",     done:false, priority:1 },
-  { id:"w5",  artist:"Fleetwood Mac",  album:"Tusk",                                  year:1979, genre:"rock",     done:false, priority:2 },
-  { id:"w6",  artist:"Fleetwood Mac",  album:"Tango in the Night",                    year:1987, genre:"rock",     done:false, priority:3 },
-  { id:"w7",  artist:"Fleetwood Mac",  album:"Mirage",                                year:1982, genre:"rock",     done:false, priority:4 },
-  { id:"w8",  artist:"Pink Floyd",     album:"The Wall",                              year:1979, genre:"rock",     done:false, start:true },
-  { id:"w9",  artist:"Pink Floyd",     album:"Wish You Were Here",                    year:1975, genre:"rock",     done:false },
-  { id:"w10", artist:"Pink Floyd",     album:"Animals",                               year:1977, genre:"rock",     done:false },
-  { id:"w11", artist:"The Smiths",     album:"The Queen Is Dead",                     year:1986, genre:"alternative", done:false },
-  { id:"w12", artist:"Wu-Tang Clan",   album:"Enter the Wu-Tang (36 Chambers)",       year:1993, genre:"hiphop",   done:false },
-  { id:"w13", artist:"The Cure",       album:"Disintegration",                        year:1989, genre:"alternative", done:false },
-  { id:"w14", artist:"Billy Joel",     album:"The Stranger",                          year:1977, genre:"pop",      done:false },
-  { id:"w15", artist:"Oasis",          album:"(What's the Story) Morning Glory?",     year:1995, genre:"rock",     done:false },
-  { id:"w16", artist:"Bob Dylan",      album:"Highway 61 Revisited",                  year:1965, genre:"folk",     done:false },
-  { id:"w17", artist:"Christopher Cross", album:"Christopher Cross",                  year:1980, genre:"pop",      done:false },
-  { id:"w18", artist:"Common",         album:"Be",                                    year:2005, genre:"hiphop",   done:false },
-  { id:"w19", artist:"Eagles",         album:"Hotel California",                      year:1976, genre:"rock",     done:false },
-  { id:"w20", artist:"ASAP Rocky",     album:"Long.Live.ASAP",                        year:2013, genre:"hiphop",   done:false, note:"Start here (chronological)" },
-  { id:"w21", artist:"ASAP Rocky",     album:"AT.LONG.LAST.ASAP",                     year:2015, genre:"hiphop",   done:false, start:true, note:"Fan favourite" },
-  { id:"w22", artist:"ASAP Rocky",     album:"Testing",                               year:2018, genre:"hiphop",   done:false },
-  { id:"w23", artist:"ASAP Rocky",     album:"Don't Be Dumb",                         year:2024, genre:"hiphop",   done:false },
-  { id:"w24", artist:"Radiohead",      album:"OK Computer",                           year:1997, genre:"alternative", done:false },
-  { id:"w25", artist:"Radiohead",      album:"Kid A",                                 year:2000, genre:"electronic", done:false },
-  { id:"w26", artist:"Radiohead",      album:"The Bends",                             year:1995, genre:"alternative", done:false },
-  { id:"w27", artist:"Steely Dan",     album:"Can't Buy a Thrill",                    year:1972, genre:"jazz",     done:false, start:true },
-  { id:"w28", artist:"Steely Dan",     album:"Countdown to Ecstasy",                  year:1973, genre:"jazz",     done:false },
-  { id:"w29", artist:"Steely Dan",     album:"Pretzel Logic",                         year:1974, genre:"jazz",     done:false },
-  { id:"w30", artist:"Steely Dan",     album:"Gaucho",                                year:1980, genre:"jazz",     done:false },
-  { id:"w31", artist:"Eagles",         album:"Desperado",                             year:1973, genre:"rock",     done:false },
-  { id:"w32", artist:"Eagles",         album:"Eagles",                                year:1972, genre:"rock",     done:false },
-  { id:"w33", artist:"Eagles",         album:"One of These Nights",                   year:1975, genre:"rock",     done:false },
-  { id:"w34", artist:"Eagles",         album:"The Long Run",                          year:1979, genre:"rock",     done:false },
-  { id:"w35", artist:"Tyler, the Creator", album:"IGOR",                              year:2019, genre:"hiphop",   done:false, start:true },
-  { id:"w36", artist:"Tyler, the Creator", album:"Flower Boy",                        year:2017, genre:"hiphop",   done:false },
-  { id:"w37", artist:"Tyler, the Creator", album:"Call Me If You Get Lost",           year:2021, genre:"hiphop",   done:false },
-  { id:"w38", artist:"Tyler, the Creator", album:"Chromakopia",                       year:2024, genre:"hiphop",   done:false },
-  { id:"w39", artist:"Tyler, the Creator", album:"Wolf",                              year:2013, genre:"hiphop",   done:false },
-  { id:"w40", artist:"The Beatles",    album:"Abbey Road",                            year:1969, genre:"rock",     done:false },
-  { id:"w41", artist:"The Beatles",    album:"Revolver",                              year:1966, genre:"rock",     done:false },
-  { id:"w42", artist:"The Beatles",    album:"Sgt. Pepper's Lonely Hearts Club Band", year:1967, genre:"rock",     done:false },
-];
-
 // ─── THEMES ───────────────────────────────────────────────────────────────────
 const THEMES = {
   midnight: {
@@ -253,12 +209,12 @@ const THEME_KEYS = Object.keys(THEMES);
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 const SK = {
-  want: "wantlist-v4", listened: "listened-v4",
+  listened: "listened-v4",
   tracks: "trackcache-v2",
   songRatings: "songratings-v1", settings: "settings-v1",
   albumOrder: "albumorder-v1", songOrder: "songorder-v1",
-  // NEW: store set of IDs permanently deleted by the user
-  deletedWant: "deleted-want-v1", deletedListened: "deleted-listened-v1",
+  // store set of IDs permanently deleted by the user
+  deletedListened: "deleted-listened-v1",
 };
 const persist = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 const loadLS = (k, fb) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; } };
@@ -273,6 +229,7 @@ function mergeWithSeed(seed, saved, deletedIds) {
 }
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+const normalize = s => (s || "").trim().toLowerCase();
 
 // ─── RESPONSIVE HELPER ────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 480) {
@@ -409,12 +366,17 @@ function ReorderArrows({ canUp, canDown, onUp, onDown, theme }) {
 }
 
 // ─── ALBUM FORM ──────────────────────────────────────────────────────────────
-function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
+function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) {
   const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop", cover:"" });
   const [saving, setSaving] = useState(false);
-  const set = (k, v) => setForm(p => ({...p, [k]: v}));
+  const [dupError, setDupError] = useState(null);
+  const set = (k, v) => { setForm(p => ({...p, [k]: v})); setDupError(null); };
   const submit = async () => {
     if (!form.artist || !form.album) return;
+    if (isDuplicate && isDuplicate(form.artist, form.album)) {
+      setDupError(`You already have "${form.album.trim()}" by ${form.artist.trim()} saved. Duplicate albums (case-insensitive) aren't allowed.`);
+      return;
+    }
     setSaving(true);
     await onSave(form);
   };
@@ -458,6 +420,13 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme }) {
         <div style={{ fontSize:11, color:theme.muted, marginBottom:14 }}>
           Cover art and the tracklist are looked up automatically once you add the album.
         </div>
+      )}
+      {dupError && (
+        <div style={{
+          color:"#f87171", fontSize:12, margin:"0 0 14px",
+          background:"#f8717118", border:"1px solid #f8717133",
+          borderRadius:8, padding:"10px 12px", lineHeight:1.5,
+        }}>{dupError}</div>
       )}
       <button onClick={submit} disabled={saving}
         style={{ width:"100%", padding:"10px", background:theme.accent, border:"none",
@@ -555,6 +524,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
   const [view, setView] = useState("tracks");
   const [activeSong, setActiveSong] = useState(null);
   const [editTracks, setEditTracks] = useState(null);
+  const [etError, setEtError] = useState(null);
 
   useEffect(() => {
   if (!tracks) {
@@ -580,16 +550,27 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
 
   const openEditTracks = () => {
     setEditTracks((trackCache[cacheKey] || []).map((t, i) => ({ id: String(i), val: t })));
+    setEtError(null);
     setView("edit");
   };
   const saveEditTracks = () => {
     const list = editTracks.map(t => t.val.trim()).filter(Boolean);
+    const seen = new Set();
+    for (const t of list) {
+      const norm = normalize(t);
+      if (seen.has(norm)) {
+        setEtError(`"${t}" appears more than once in this tracklist (track names must be unique, case-insensitive).`);
+        return;
+      }
+      seen.add(norm);
+    }
+    setEtError(null);
     const next = { ...trackCache, [cacheKey]: list };
     setTrackCache(next);
     persist(SK.tracks, next);
     setView("tracks");
   };
-  const etSet = (id, val) => setEditTracks(p => p.map(t => t.id === id ? { ...t, val } : t));
+  const etSet = (id, val) => { setEditTracks(p => p.map(t => t.id === id ? { ...t, val } : t)); setEtError(null); };
   const etRemove = id => setEditTracks(p => p.filter(t => t.id !== id));
   const etAdd = () => setEditTracks(p => [...p, { id: uid(), val: "" }]);
   const etMove = (id, dir) => setEditTracks(p => {
@@ -643,6 +624,13 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
             border:`1px dashed ${theme.border}`, borderRadius:8,
             color:theme.muted, cursor:"pointer", fontSize:12,
           }}>+ Add track</button>
+          {etError && (
+            <div style={{
+              marginTop:10, color:"#f87171", fontSize:12,
+              background:"#f8717118", border:"1px solid #f8717133",
+              borderRadius:8, padding:"9px 11px", lineHeight:1.5,
+            }}>{etError}</div>
+          )}
           <button onClick={saveEditTracks} style={{
             marginTop:8, width:"100%", padding:"9px", background:theme.accent,
             border:"none", borderRadius:8, color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer",
@@ -722,9 +710,8 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
 }
 
 // ─── ARTIST DETAIL MODAL ─────────────────────────────────────────────────────
-function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum }) {
+function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum }) {
   const listenedAlbums = listened.filter(a => a.artist === artist);
-  const wantAlbums = want.filter(a => a.artist === artist);
 
   const effectiveRating = a => {
     if (settings.listenSort === "raw") {
@@ -747,7 +734,7 @@ function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, se
   const artistAvg = ratedVals.length ? (ratedVals.reduce((x, y) => x + y, 0) / ratedVals.length) : null;
   const avgRc = ratingColor(artistAvg);
 
-  const cover = (listenedAlbums.find(a => a.cover) || wantAlbums.find(a => a.cover))?.cover;
+  const cover = listenedAlbums.find(a => a.cover)?.cover;
 
   const topSongs = Object.entries(songRatings)
     .filter(([k, r]) => r != null && k.startsWith(artist + "||"))
@@ -767,7 +754,7 @@ function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, se
         <div style={{ flex:1, minWidth:120 }}>
           <h2 style={{ margin:"0 0 4px", fontSize:19, color:theme.text, fontWeight:800 }}>{artist}</h2>
           <div style={{ fontSize:12, color:theme.muted }}>
-            {listenedAlbums.length} heard{wantAlbums.length ? ` · ${wantAlbums.length} on want-list` : ""}
+            {listenedAlbums.length} heard
           </div>
         </div>
         {artistAvg != null && (
@@ -794,7 +781,7 @@ function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, se
               const rating = effectiveRating(a);
               const rc = ratingColor(rating);
               return (
-                <div key={a.id} onClick={() => onOpenAlbum(a, "listened")} style={{
+                <div key={a.id} onClick={() => onOpenAlbum(a)} style={{
                   display:"flex", alignItems:"center", gap:10, padding:"8px 10px", cursor:"pointer",
                   background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
                 }}>
@@ -818,35 +805,6 @@ function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, se
                     fontSize:13, fontWeight:800,
                   }}>
                     {rating != null ? rating.toFixed(1) : "+"}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {wantAlbums.length > 0 && (
-        <div style={{ marginBottom:22 }}>
-          <div style={{ fontSize:12, color:theme.muted, marginBottom:8, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
-            Want to hear
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {wantAlbums.map(a => {
-              const c = GENRES[a.genre]?.color || "#888";
-              return (
-                <div key={a.id} onClick={() => onOpenAlbum(a, "want")} style={{
-                  display:"flex", alignItems:"center", gap:10, padding:"8px 10px", cursor:"pointer",
-                  background: a.done ? theme.surface : theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
-                  opacity: a.done ? 0.5 : 1,
-                }}>
-                  {a.cover && <img src={a.cover} alt={a.album} style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:theme.text, textDecoration: a.done ? "line-through" : "none" }}>{a.album}</div>
-                    <div style={{ fontSize:11, color:theme.muted }}>{a.year}</div>
-                  </div>
-                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:c+"18", color:c, border:`1px solid ${c}30`, flexShrink:0 }}>
-                    {GENRES[a.genre]?.label}
                   </div>
                 </div>
               );
@@ -889,7 +847,7 @@ function ArtistDetailModal({ artist, want, listened, trackCache, songRatings, se
         </div>
       )}
 
-      {sortedListened.length === 0 && wantAlbums.length === 0 && (
+      {sortedListened.length === 0 && (
         <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"20px 0" }}>No albums found for this artist.</div>
       )}
     </Modal>
@@ -923,7 +881,7 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
       </div>
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Default tab</div>
-        {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([k,l]) => (
+        {[["heard","Rated & Ranked"],["top50","Song Leaderboard"],["stats","Stats"]].map(([k,l]) => (
           <label key={k} style={{ display:"flex", alignItems:"center", gap:10, padding:"7px 0", cursor:"pointer" }}>
             <div style={{
               width:16, height:16, borderRadius:"50%", border:`2px solid ${settings.defaultTab===k ? theme.accent : theme.border}`,
@@ -1010,56 +968,246 @@ async function getAlbumInfo(artist, album) {
   return { cover: null, tracks: [] };
 }
 
+// ─── STATS PAGE ──────────────────────────────────────────────────────────────
+function StatBar({ label, value, max, color, theme, formatValue }) {
+  const pct = max > 0 ? Math.max((value / max) * 100, value > 0 ? 2 : 0) : 0;
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+      <div style={{ width:110, fontSize:12, color:theme.muted, flexShrink:0, textAlign:"right",
+        overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{label}</div>
+      <div style={{ flex:1, height:16, background:theme.card, borderRadius:5, overflow:"hidden", border:`1px solid ${theme.border}` }}>
+        <div style={{ height:"100%", width:`${pct}%`, background:color, borderRadius:5, transition:"width .4s" }} />
+      </div>
+      <div style={{ width:32, fontSize:12, color:theme.text, fontWeight:700, flexShrink:0 }}>{formatValue ? formatValue(value) : value}</div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, sub, theme }) {
+  return (
+    <div style={{ flex:"1 1 120px", background:theme.card, border:`1px solid ${theme.border}`, borderRadius:10, padding:"14px 12px", textAlign:"center" }}>
+      <div style={{ fontSize:22, fontWeight:800, color:theme.text }}>{value}</div>
+      <div style={{ fontSize:11, color:theme.muted, marginTop:2 }}>{label}</div>
+      {sub && <div style={{ fontSize:10, color:theme.muted, marginTop:2, opacity:0.75 }}>{sub}</div>}
+    </div>
+  );
+}
+
+function SectionHeading({ children, theme }) {
+  return (
+    <div style={{ fontSize:12, color:theme.muted, marginBottom:10, fontWeight:700, letterSpacing:"0.5px", textTransform:"uppercase" }}>
+      {children}
+    </div>
+  );
+}
+
+function StatsPage({ listened, songRatings, trackCache, theme, isMobile }) {
+  const ratedAlbums = listened.filter(a => a.rating != null);
+  const avgAlbum = ratedAlbums.length ? ratedAlbums.reduce((s, a) => s + a.rating, 0) / ratedAlbums.length : null;
+
+  const songRatingVals = Object.values(songRatings).filter(v => v != null);
+  const avgSong = songRatingVals.length ? songRatingVals.reduce((s, v) => s + v, 0) / songRatingVals.length : null;
+
+  const totalTracks = Object.values(trackCache).reduce((s, arr) => s + (arr ? arr.length : 0), 0);
+
+  // genre breakdown (listened albums)
+  const genreCounts = {};
+  listened.forEach(a => { genreCounts[a.genre] = (genreCounts[a.genre] || 0) + 1; });
+  const genreEntries = Object.entries(genreCounts).sort((a, b) => b[1] - a[1]);
+  const genreTotal = listened.length || 1;
+
+  // conic-gradient donut
+  let acc = 0;
+  const gradientParts = genreEntries.map(([g, count]) => {
+    const start = (acc / genreTotal) * 360;
+    acc += count;
+    const end = (acc / genreTotal) * 360;
+    const color = GENRES[g]?.color || "#888";
+    return `${color} ${start}deg ${end}deg`;
+  });
+  const donutStyle = genreEntries.length
+    ? { background: `conic-gradient(${gradientParts.join(",")})` }
+    : { background: theme.card };
+
+  // rating distribution buckets 0-1 ... 9-10
+  const buckets = Array.from({ length: 10 }, () => 0);
+  ratedAlbums.forEach(a => {
+    const idx = a.rating >= 10 ? 9 : Math.min(9, Math.floor(a.rating));
+    buckets[idx]++;
+  });
+  const maxBucket = Math.max(...buckets, 1);
+
+  // top artists by album count
+  const artistCounts = {};
+  listened.forEach(a => { artistCounts[a.artist] = (artistCounts[a.artist] || 0) + 1; });
+  const topArtists = Object.entries(artistCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const maxArtist = Math.max(...topArtists.map(a => a[1]), 1);
+
+  // albums by decade
+  const decadeCounts = {};
+  listened.forEach(a => {
+    const d = Math.floor((a.year || 0) / 10) * 10;
+    decadeCounts[d] = (decadeCounts[d] || 0) + 1;
+  });
+  const decadeEntries = Object.entries(decadeCounts).sort((a, b) => Number(a[0]) - Number(b[0]));
+  const maxDecade = Math.max(...decadeEntries.map(d => d[1]), 1);
+
+  return (
+    <div style={{ padding:isMobile?"16px 12px":"16px 18px" }}>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:26 }}>
+        <StatCard label="Albums rated" value={listened.length} theme={theme} />
+        <StatCard label="Avg album rating" value={avgAlbum != null ? avgAlbum.toFixed(2) : "—"} theme={theme} />
+        <StatCard label="Songs rated" value={songRatingVals.length} sub={totalTracks ? `of ${totalTracks} tracked` : null} theme={theme} />
+        <StatCard label="Avg song rating" value={avgSong != null ? avgSong.toFixed(2) : "—"} theme={theme} />
+        <StatCard label="Artists" value={Object.keys(artistCounts).length} theme={theme} />
+      </div>
+
+      {listened.length === 0 && (
+        <div style={{ textAlign:"center", padding:"48px 0", color:theme.muted }}>
+          <div style={{ fontSize:32, marginBottom:10 }}>📊</div>
+          <div style={{ fontSize:14 }}>No stats yet</div>
+          <div style={{ fontSize:12, marginTop:6 }}>Rate some albums and songs to see your stats here</div>
+        </div>
+      )}
+
+      {genreEntries.length > 0 && (
+        <div style={{ marginBottom:30 }}>
+          <SectionHeading theme={theme}>Genre breakdown</SectionHeading>
+          <div style={{ display:"flex", gap:22, alignItems:"center", flexWrap:"wrap" }}>
+            <div style={{ width:130, height:130, borderRadius:"50%", flexShrink:0, ...donutStyle }} />
+            <div style={{ flex:1, minWidth:180, display:"flex", flexDirection:"column", gap:6 }}>
+              {genreEntries.slice(0, 8).map(([g, count]) => (
+                <div key={g} style={{ display:"flex", alignItems:"center", gap:8, fontSize:12 }}>
+                  <div style={{ width:10, height:10, borderRadius:3, background:GENRES[g]?.color || "#888", flexShrink:0 }} />
+                  <span style={{ color:theme.text, flex:1 }}>{GENRES[g]?.label || g}</span>
+                  <span style={{ color:theme.muted }}>{count} ({Math.round((count/genreTotal)*100)}%)</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ratedAlbums.length > 0 && (
+        <div style={{ marginBottom:30 }}>
+          <SectionHeading theme={theme}>Rating distribution (albums)</SectionHeading>
+          {buckets.map((count, i) => (
+            <StatBar key={i} label={i === 9 ? "9 – 10" : `${i} – ${i + 1}`} value={count} max={maxBucket}
+              color={ratingColor(i === 9 ? 10 : i + 0.5).startsWith("linear-gradient") ? "#f78fbf" : ratingColor(i + 0.5)}
+              theme={theme} />
+          ))}
+        </div>
+      )}
+
+      {topArtists.length > 0 && (
+        <div style={{ marginBottom:30 }}>
+          <SectionHeading theme={theme}>Top artists (by albums rated)</SectionHeading>
+          {topArtists.map(([artist, count]) => (
+            <StatBar key={artist} label={artist} value={count} max={maxArtist} color={theme.accent} theme={theme} />
+          ))}
+        </div>
+      )}
+
+      {decadeEntries.length > 0 && (
+        <div>
+          <SectionHeading theme={theme}>Albums by decade</SectionHeading>
+          <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:120, paddingBottom:4 }}>
+            {decadeEntries.map(([decade, count]) => (
+              <div key={decade} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4, minWidth:0 }}>
+                <div style={{ fontSize:11, color:theme.text, fontWeight:700 }}>{count}</div>
+                <div style={{
+                  width:"100%", maxWidth:34,
+                  height:`${Math.max((count / maxDecade) * 90, 4)}px`,
+                  background:theme.accent, borderRadius:"4px 4px 0 0",
+                }} />
+                <div style={{ fontSize:10, color:theme.muted }}>{decade}s</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN ────────────────────────────────────────────────────────────────────
 export default function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
   const [settings, setSettings] = useState(() => loadLS(SK.settings, {
-    theme: "midnight", defaultTab: "want", listenSort: "rating", compactMode: false,
+    theme: "midnight", defaultTab: "heard", listenSort: "rating", compactMode: false,
   }));
   const theme = THEMES[settings.theme] || THEMES.midnight;
   const isMobile = useIsMobile();
   const coverSize = isMobile ? 46 : 80;
   const rowGap = isMobile ? 6 : 9;
 
-  const [tab, setTab] = useState(settings.defaultTab || "want");
+  // ── tab comes from the URL so it's linkable and back/forward works ──────
+  const pathTab = location.pathname.replace(/^\/+/, "").split("/")[0];
+  const tab = pathTab === "leaderboard" ? "top50" : pathTab === "stats" ? "stats" : "heard";
+  const setTab = key => {
+    const path = key === "top50" ? "/leaderboard" : key === "stats" ? "/stats" : "/rated";
+    navigate(path);
+  };
 
-  // Load deleted ID sets first so mergeWithSeed can exclude them
-  const [deletedWant,     setDeletedWant]     = useState(() => loadLS(SK.deletedWant, []));
+  // ── detail modals are driven by query params so they get their own link ─
+  const detailAlbumId = searchParams.get("album");
+  const detailArtistName = searchParams.get("artist");
+  const detailSongKey = searchParams.get("song");
+
+  const openAlbum = (album) => setSearchParams({ album: album.id });
+  const openArtist = (name) => setSearchParams({ artist: name });
+  const openSong = (song) => setSearchParams({ song: song.key || `${song.artist}||${song.album}||${song.song}` });
+  const closeDetail = () => setSearchParams({});
+
+  // redirect "/" (or any unknown path) to the configured default tab
+  useEffect(() => {
+    const known = ["rated", "leaderboard", "stats"];
+    if (!known.includes(pathTab)) {
+      const def = settings.defaultTab === "top50" ? "/leaderboard" : settings.defaultTab === "stats" ? "/stats" : "/rated";
+      navigate(def, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathTab]);
+
   const [deletedListened, setDeletedListened] = useState(() => loadLS(SK.deletedListened, []));
 
-  const [want, setWant]         = useState(() => mergeWithSeed(SEED_WANT,     loadLS(SK.want, null),     loadLS(SK.deletedWant, [])));
   const [listened, setListened] = useState(() => mergeWithSeed(SEED_LISTENED, loadLS(SK.listened, null), loadLS(SK.deletedListened, [])));
   const [trackCache, setTrackCache] = useState(() => loadLS(SK.tracks, {}));
   const [songRatings, setSongRatings] = useState(() => loadLS(SK.songRatings, {}));
   const [albumOrder, setAlbumOrder] = useState(() => loadLS(SK.albumOrder, []));
   const [songOrder, setSongOrder]   = useState(() => loadLS(SK.songOrder, []));
 
-  const [wantFilter, setWantFilter]     = useState("all");
   const [listenFilter, setListenFilter] = useState("all");
-  const [searchWant,setSearchWant]=useState("");
   const [searchHeard,setSearchHeard]=useState("");
   const [searchTop50,setSearchTop50]=useState("");
   const [top50Artist,setTop50Artist]=useState("all");
   const [top50Genre,setTop50Genre]=useState("all");
 const [top50RatingRange,setTop50RatingRange]=useState("all");
-  const [wantSort,setWantSort]=useState("default");
   const [heardSort,setHeardSort]=useState(settings.listenSort==="rating"?"final":"default");
-  const [hideDone, setHideDone]         = useState(false);
   const [editRatingId, setEditRatingId] = useState(null);
   const [editRatingVal, setEditRatingVal] = useState("");
 
-  const [detailAlbum, setDetailAlbum]   = useState(null);
-  const [detailSong, setDetailSong]     = useState(null);
-  const [detailArtist, setDetailArtist] = useState(null);
   const [addModal, setAddModal]         = useState(null);
   const [editModal, setEditModal]       = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  useEffect(() => { persist(SK.want,     want);     }, [want]);
+  // derive the actual detail objects from the URL params each render
+  const detailAlbum = detailAlbumId ? listened.find(a => a.id === detailAlbumId) || null : null;
+  const detailArtist = detailArtistName || null;
+  const detailSong = detailSongKey
+    ? (() => {
+        const parts = detailSongKey.split("||");
+        return { key: detailSongKey, artist: parts[0], album: parts[1], song: parts[2] };
+      })()
+    : null;
+
   useEffect(() => { persist(SK.listened, listened); }, [listened]);
   useEffect(() => { persist(SK.albumOrder, albumOrder); }, [albumOrder]);
   useEffect(() => { persist(SK.songOrder, songOrder); }, [songOrder]);
-  useEffect(() => { persist(SK.deletedWant,     deletedWant);     }, [deletedWant]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
 
 useEffect(() => {
@@ -1077,14 +1225,12 @@ useEffect(() => {
 
     const cloud = data.data;
 
-    setWant(cloud.want || []);
     setListened(cloud.listened || []);
     setTrackCache(cloud.trackCache || {});
     setSongRatings(cloud.songRatings || {});
     setSettings(cloud.settings || settings);
     setAlbumOrder(cloud.albumOrder || []);
     setSongOrder(cloud.songOrder || []);
-    setDeletedWant(cloud.deletedWant || []);
     setDeletedListened(cloud.deletedListened || []);
   }
 
@@ -1094,14 +1240,12 @@ useEffect(() => {
 useEffect(() => {
   const timer = setTimeout(async () => {
     const payload = {
-      want,
       listened,
       trackCache,
       songRatings,
       settings,
       albumOrder,
       songOrder,
-      deletedWant,
       deletedListened,
     };
 
@@ -1115,14 +1259,12 @@ useEffect(() => {
 
   return () => clearTimeout(timer);
 }, [
-  want,
   listened,
   trackCache,
   songRatings,
   settings,
   albumOrder,
   songOrder,
-  deletedWant,
   deletedListened,
 ]);
 
@@ -1148,25 +1290,13 @@ useEffect(() => {
       : null;
   };
 
-  // mark want done → move to listened
-  const toggleWantDone = id => {
-    const album = want.find(a => a.id === id);
-    if (!album) return;
-    if (!album.done) {
-      setListened(prev => [{ id:uid(), artist:album.artist, album:album.album, year:album.year, genre:album.genre, rating:null }, ...prev]);
-      setWant(prev => prev.filter(a => a.id !== id));
-    } else {
-      setWant(prev => prev.map(a => a.id === id ? {...a, done:!a.done} : a));
-    }
-  };
+  // case-insensitive duplicate check for albums, excluding the album's own id when editing
+  const isDuplicateAlbum = (artist, album, excludeId) => listened.some(a =>
+    a.id !== excludeId && normalize(a.artist) === normalize(artist) && normalize(a.album) === normalize(album)
+  );
 
-  // move a listened album back to the want-to-hear list
-  const moveBackToWant = (album) => {
-    setWant(prev => [{ id:uid(), artist:album.artist, album:album.album, year:album.year, genre:album.genre, cover:album.cover, done:false }, ...prev]);
-    setListened(prev => prev.filter(a => a.id !== album.id));
-  };
-
-  const handleAdd = async (form, source) => {
+  const handleAdd = async (form) => {
+  if (isDuplicateAlbum(form.artist, form.album)) return;
   const { cover: fetchedCover, tracks } = await getAlbumInfo(form.artist, form.album);
   const cover = form.cover?.trim() ? form.cover.trim() : fetchedCover;
 
@@ -1177,11 +1307,7 @@ useEffect(() => {
     cover,
   };
 
-  if (source === "want") {
-    setWant(prev => [...prev, { ...entry, done: false }]);
-  } else {
-    setListened(prev => [...prev, { ...entry, rating: null }]);
-  }
+  setListened(prev => [...prev, { ...entry, rating: null }]);
 
   if (tracks.length) {
     const cacheKey = `${form.artist}||${form.album}`;
@@ -1195,27 +1321,22 @@ useEffect(() => {
   setAddModal(null);
 };
 
-  const handleEdit = (form, source, id) => {
-    if (source === "want") setWant(prev => prev.map(a => a.id===id ? {...a,...form,year:parseInt(form.year)} : a));
-    else setListened(prev => prev.map(a => a.id===id ? {...a,...form,year:parseInt(form.year)} : a));
+  const handleEdit = (form, id) => {
+    if (isDuplicateAlbum(form.artist, form.album, id)) return;
+    setListened(prev => prev.map(a => a.id===id ? {...a,...form,year:parseInt(form.year)} : a));
     setEditModal(null);
   };
 
-  // PERMANENT delete — record ID in deletedWant/deletedListened so seed never re-adds it
-  const handleDelete = (id, source) => {
-    if (source === "want") {
-      setWant(prev => prev.filter(a => a.id !== id));
-      setDeletedWant(prev => prev.includes(id) ? prev : [...prev, id]);
-    } else {
-      setListened(prev => prev.filter(a => a.id !== id));
-      setDeletedListened(prev => prev.includes(id) ? prev : [...prev, id]);
-    }
+  // PERMANENT delete — record ID in deletedListened so seed never re-adds it
+  const handleDelete = (id) => {
+    setListened(prev => prev.filter(a => a.id !== id));
+    setDeletedListened(prev => prev.includes(id) ? prev : [...prev, id]);
     setDeleteConfirm(null);
   };
 
-  const requestDelete = (album, source) => {
-    const warning = source === "listened" ? buildDeleteWarning(album) : null;
-    setDeleteConfirm({ id: album.id, source, albumName: album.album, warning });
+  const requestDelete = (album) => {
+    const warning = buildDeleteWarning(album);
+    setDeleteConfirm({ id: album.id, albumName: album.album, warning });
   };
 
   const commitRating = id => {
@@ -1252,12 +1373,6 @@ useEffect(() => {
     return applyTieOrder(tagged, albumOrder, a => a.id);
   };
 
-  let visibleWant = want.filter(a =>
-    (wantFilter==="all" || a.genre===wantFilter) && (!hideDone || !a.done) &&
-    (`${a.artist} ${a.album}`.toLowerCase().includes(searchWant.toLowerCase()))
-  );
-  if(wantSort==="artist") visibleWant=[...visibleWant].sort((a,b)=>a.artist.localeCompare(b.artist));
-
   let visibleListened = sortListened(listened.filter(a =>
     (listenFilter==="all" || a.genre===listenFilter) &&
     (`${a.artist} ${a.album}`.toLowerCase().includes(searchHeard.toLowerCase()))
@@ -1288,7 +1403,7 @@ useEffect(() => {
       return { key, artist:parts[0], album:parts[1], song:parts[2], rating, __rating: rating };
     })
     .filter(s=>top50Artist==="all"||s.artist===top50Artist)
-    .filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
+    .filter(s=>{const ao=listened.find(a=>a.artist===s.artist&&a.album===s.album); return top50Genre==="all" || ao?.genre===top50Genre;})
     .filter(s=> top50RatingRange==="all" ? true : (top50RatingRange==="9" ? s.rating>=9 : (s.rating>=Number(top50RatingRange) && s.rating<Number(top50RatingRange)+1)))
     .sort((a,b)=>b.rating-a.rating);
   const top50 = applyTieOrder(top50Base, songOrder, s => s.key);
@@ -1315,7 +1430,7 @@ useEffect(() => {
           }}>⚙️ Settings</button>
         </div>
         <div style={{ display:"flex", gap:0 }}>
-          {[["heard","Rated & Ranked"],["top50","Song Leaderboard"]].map(([key,label]) => (
+          {[["heard","Rated & Ranked"],["top50","Song Leaderboard"],["stats","Stats"]].map(([key,label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
               padding:isMobile?"7px 8px":"7px 14px", border:"none", cursor:"pointer", fontSize:12, fontWeight:600,
               background:"transparent", color: tab===key ? theme.text : theme.muted,
@@ -1325,182 +1440,6 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ══ TO-LISTEN ════════════════════════════════════════════════════════ */}
-      {tab === "want" && (
-        <>
-          <div style={{ padding:isMobile?"12px 12px 10px":"12px 18px 10px", borderBottom:`1px solid ${theme.border}` }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-              <div style={{ flex:1, height:4, background:theme.card, borderRadius:2, overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${Math.round((want.filter(a=>a.done).length/Math.max(want.length,1))*100)}%`,
-                  background:`linear-gradient(90deg,${theme.accent},#60a5fa)`, borderRadius:2, transition:"width .4s" }} />
-              </div>
-              <span style={{ fontSize:13, color:theme.muted, whiteSpace:"nowrap" }}>{want.filter(a=>a.done).length}/{want.length}</span>
-            </div>
-            <FilterBar items={want} active={wantFilter} onSelect={setWantFilter} extra={
-              <button onClick={() => setHideDone(p=>!p)} style={{
-                marginLeft:"auto", padding:"3px 10px", borderRadius:20, border:`1px solid ${theme.border}`,
-                background:"transparent", color:theme.muted, cursor:"pointer", fontSize:11,
-              }}>{hideDone ? "Show done" : "Hide done"}</button>
-            } />
-          </div>
-
-          <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
-            <button onClick={() => setAddModal("want")} style={{
-              padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
-              borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"center",
-            }}>+ Add album</button>
-            {visibleWant.map(a => {
-  const c = GENRES[a.genre]?.color || "#888";
-
-  return (
-    <div key={a.id} style={{
-      display:"flex",
-      alignItems:"center",
-      gap:rowGap,
-      padding:pad,
-      background: a.done ? theme.surface : theme.card,
-      borderRadius:9,
-      border: a.start && !a.done
-        ? `1px solid ${c}55`
-        : `1px solid ${theme.border}`,
-      opacity: a.done ? 0.4 : 1,
-      transition:"opacity .2s",
-    }}>
-
-      {a.cover && (
-        <img
-          src={a.cover}
-          alt={a.album}
-          style={{
-            width: coverSize,
-            height: coverSize,
-            borderRadius: 8,
-            objectFit: "cover",
-            flexShrink: 0,
-          }}
-        />
-      )}
-
-      <div onClick={() => toggleWantDone(a.id)} style={{
-        width:19,
-        height:19,
-        borderRadius:"50%",
-        flexShrink:0,
-        cursor:"pointer",
-        border:`2px solid ${a.done ? c : theme.border}`,
-        background: a.done ? c : "transparent",
-        display:"flex",
-        alignItems:"center",
-        justifyContent:"center",
-        transition:"all .2s",
-      }}>
-        {a.done && (
-          <span style={{
-            color:"#000",
-            fontSize:10,
-            fontWeight:800
-          }}>
-            ✓
-          </span>
-        )}
-      </div>
-
-      <div
-        onClick={() => setDetailAlbum(a)}
-        style={{ flex:1, minWidth:0, cursor:"pointer", textAlign:"center" }}
-      >
-        <div style={{
-          display:"flex",
-          alignItems:"center",
-          justifyContent:"center",
-          gap:5,
-          flexWrap:"wrap"
-        }}>
-          <span style={{
-            fontSize:13,
-            fontWeight:600,
-            color: a.done ? theme.muted : theme.text,
-            textDecoration: a.done ? "line-through" : "none"
-          }}>
-            {a.album}
-          </span>
-
-          {a.start && !a.done && (
-            <span style={{
-              fontSize:9,
-              padding:"1px 5px",
-              borderRadius:5,
-              background:c+"30",
-              color:c,
-              fontWeight:800
-            }}>
-              START HERE
-            </span>
-          )}
-        </div>
-
-        {!compact && (
-          <div style={{
-            fontSize:11,
-            color:theme.muted,
-            marginTop:1
-          }}>
-            <span onClick={e => { e.stopPropagation(); setDetailArtist(a.artist); }}
-              style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
-              onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
-              onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
-            >{a.artist}</span> · {a.year}
-            {a.note ? ` · ${a.note}` : ""}
-          </div>
-        )}
-      </div>
-
-      <div style={{
-        fontSize:10,
-        padding:"2px 7px",
-        borderRadius:8,
-        background:c+"18",
-        color:c,
-        border:`1px solid ${c}30`,
-        flexShrink:0
-      }}>
-        {GENRES[a.genre]?.label}
-      </div>
-
-      <button
-        onClick={() => setEditModal({album:a, source:"want"})}
-        style={{
-          background:"none",
-          border:"none",
-          color:theme.muted,
-          cursor:"pointer",
-          fontSize:13,
-          padding:"0 2px"
-        }}
-      >
-        ✏️
-      </button>
-
-      <button
-        onClick={() => requestDelete(a, "want")}
-        style={{
-          background:"none",
-          border:"none",
-          color:theme.muted,
-          cursor:"pointer",
-          fontSize:13,
-          padding:"0 2px"
-        }}
-      >
-        🗑️
-      </button>
-
-    </div>
-  );
-})}
-          </div>
-        </>
-      )}
       {/* ══ RATED & RANKED ═══════════════════════════════════════════════════ */}
       {tab === "heard" && (
         <>
@@ -1517,7 +1456,7 @@ useEffect(() => {
             </div>
           </div>
           <div style={{ padding:isMobile?"10px 12px":"10px 18px", display:"flex", flexDirection:"column", gap:5 }}>
-            <button onClick={() => setAddModal("listened")} style={{
+            <button onClick={() => setAddModal(true)} style={{
               padding:"9px", background:theme.surface, border:`1px dashed ${theme.border}`,
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
             }}>+ Add album</button>
@@ -1577,7 +1516,7 @@ useEffect(() => {
       )}
 
       <div
-        onClick={() => setDetailAlbum(a)}
+        onClick={() => openAlbum(a)}
         style={{ flex:1, minWidth:0, cursor:"pointer" }}
       >
         <div style={{
@@ -1594,7 +1533,7 @@ useEffect(() => {
             color:theme.muted,
             marginTop:1
           }}>
-            <span onClick={e => { e.stopPropagation(); setDetailArtist(a.artist); }}
+            <span onClick={e => { e.stopPropagation(); openArtist(a.artist); }}
               style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
               onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
               onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
@@ -1665,7 +1604,7 @@ useEffect(() => {
       )}
 
       <button
-        onClick={() => setEditModal({album:a, source:"listened"})}
+        onClick={() => setEditModal({album:a})}
         style={{
           background:"none",
           border:"none",
@@ -1679,7 +1618,7 @@ useEffect(() => {
       </button>
 
       <button
-        onClick={() => requestDelete(a, "listened")}
+        onClick={() => requestDelete(a)}
         style={{
           background:"none",
           border:"none",
@@ -1691,7 +1630,6 @@ useEffect(() => {
       >
         🗑️
       </button>
-      <button onClick={() => moveBackToWant(a)} style={{background:"none",border:"none",color:theme.muted,cursor:"pointer",fontSize:12}}>↩</button>
     </div>
   );
 })}
@@ -1725,14 +1663,13 @@ useEffect(() => {
             {top50.filter(s=>{
 const searchOk=`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase());
 const artistOk=top50Artist==="all"||s.artist===top50Artist;
-const genreOk=top50Genre==="all"||((listened.find(a=>a.artist===s.artist&&a.album===s.album)||want.find(a=>a.artist===s.artist&&a.album===s.album))?.genre===top50Genre);
+const genreOk=top50Genre==="all"||(listened.find(a=>a.artist===s.artist&&a.album===s.album)?.genre===top50Genre);
 const ratingOk=top50RatingRange==="all"||(top50RatingRange==="9"?s.rating>=9:(s.rating>=Number(top50RatingRange)&&s.rating<Number(top50RatingRange)+1));
 return searchOk&&artistOk&&genreOk&&ratingOk;
 })
 .map((s, i) => {
               const rc = ratingColor(s.rating);
-              const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album)
-                           || want.find(a => a.artist===s.artist && a.album===s.album);
+              const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album);
               const c = albumObj ? GENRES[albumObj.genre]?.color || "#888" : "#888";
               const prevS = top50[i-1];
               const nextS = top50[i+1];
@@ -1767,7 +1704,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
   />
 )}
 
-<div onClick={() => setDetailSong(s)} style={{
+<div onClick={() => openSong(s)} style={{
   flex:1,
   minWidth:0,
   cursor:"pointer",
@@ -1778,7 +1715,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:16, fontWeight:700, color:theme.text }}>{s.song}</div>
                       <div style={{ fontSize:13, color:theme.muted, marginTop:1 }}>
-                        <span onClick={e => { e.stopPropagation(); setDetailArtist(s.artist); }}
+                        <span onClick={e => { e.stopPropagation(); openArtist(s.artist); }}
                           style={{ cursor:"pointer", textDecoration:"underline", textDecorationColor:"transparent" }}
                           onMouseEnter={e => e.currentTarget.style.textDecorationColor = theme.muted}
                           onMouseLeave={e => e.currentTarget.style.textDecorationColor = "transparent"}
@@ -1791,12 +1728,12 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
                       {GENRES[albumObj.genre]?.label}
                     </div>
                   )}
-                  <div onClick={() => setDetailSong(s)} style={{ minWidth:40, padding:"4px 7px", borderRadius:6, cursor:"pointer",
+                  <div onClick={() => openSong(s)} style={{ minWidth:40, padding:"4px 7px", borderRadius:6, cursor:"pointer",
                     background:(rc.startsWith("linear-gradient")?rc:rc+"22"), border:`1px solid ${rc}55`, color:(rc.startsWith("linear-gradient")?"#ffffff":rc), textShadow:(rc.startsWith("linear-gradient")?"0 1px 2px rgba(0,0,0,.7),0 0 4px rgba(0,0,0,.35)":"none"),
                     fontSize:14, fontWeight:800, textAlign:"center", flexShrink:0 }}>
                     {s.rating.toFixed(1)}
                   </div>
-                  <span onClick={() => setDetailSong(s)} style={{ fontSize:13, color:theme.muted, cursor:"pointer", flexShrink:0 }}>›</span>
+                  <span onClick={() => openSong(s)} style={{ fontSize:13, color:theme.muted, cursor:"pointer", flexShrink:0 }}>›</span>
                 </div>
               );
             })}
@@ -1804,49 +1741,55 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
         </div>
       )}
 
+      {/* ══ STATS ════════════════════════════════════════════════════════════ */}
+      {tab === "stats" && (
+        <StatsPage listened={listened} songRatings={songRatings} trackCache={trackCache} theme={theme} isMobile={isMobile} />
+      )}
+
       {/* ══ MODALS ═══════════════════════════════════════════════════════════ */}
       {detailAlbum && (<>
 <div>{detailAlbum?.cover && <img src={detailAlbum.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
         <AlbumDetailModal
-          album={detailAlbum} onClose={() => setDetailAlbum(null)}
+          album={detailAlbum} onClose={closeDetail}
           trackCache={trackCache} setTrackCache={setTrackCache}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
-          onOpenArtist={name => { setDetailAlbum(null); setDetailArtist(name); }}
+          onOpenArtist={name => openArtist(name)}
         />
       </>) }
-      {detailSong && (<>
-        <div>{detailSong?.cover && <img src={detailSong.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
+      {!detailAlbum && detailSong && (<>
         <SongDetailModal
-          song={detailSong} onClose={() => setDetailSong(null)}
+          song={detailSong} onClose={closeDetail}
           songRatings={songRatings} setSongRatings={setSongRatings}
           theme={theme}
-          onOpenArtist={name => { setDetailSong(null); setDetailArtist(name); }}
+          onOpenArtist={name => openArtist(name)}
         />
       </>)}
-      {detailArtist && (
+      {!detailAlbum && !detailSong && detailArtist && (
         <ArtistDetailModal
-          artist={detailArtist} onClose={() => setDetailArtist(null)}
-          want={want} listened={listened}
+          artist={detailArtist} onClose={closeDetail}
+          listened={listened}
           trackCache={trackCache} songRatings={songRatings}
           settings={settings} theme={theme}
-          onOpenAlbum={(album) => { setDetailArtist(null); setDetailAlbum(album); }}
+          onOpenAlbum={(album) => openAlbum(album)}
         />
       )}
       {addModal && (
-        <AlbumFormModal mode="add" onSave={form => handleAdd(form, addModal)}
+        <AlbumFormModal mode="add" onSave={form => handleAdd(form)}
+          isDuplicate={(artist, album) => isDuplicateAlbum(artist, album)}
           onClose={() => setAddModal(null)} theme={theme} />
       )}
       {editModal && (
         <AlbumFormModal mode="edit" initial={editModal.album}
-          onSave={form => handleEdit(form, editModal.source, editModal.album.id)}
+          onSave={form => handleEdit(form, editModal.album.id)}
+          isDuplicate={(artist, album) => isDuplicateAlbum(artist, album, editModal.album.id)}
           onClose={() => setEditModal(null)} theme={theme} />
       )}
       {deleteConfirm && (
         <ConfirmModal
           message={`Delete "${deleteConfirm.albumName}"?`}
           subMessage={deleteConfirm.warning}
-          onConfirm={() => handleDelete(deleteConfirm.id, deleteConfirm.source)}
+          onConfirm={() => handleDelete(deleteConfirm.id)}
           onClose={() => setDeleteConfirm(null)}
           theme={theme}
         />
