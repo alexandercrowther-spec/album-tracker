@@ -5,24 +5,31 @@
 // AOTY blocks direct browser requests (bot protection + no CORS headers).
 //
 // AOTY has no official API. This uses a free, community-run unofficial
-// wrapper (aoty.prigoana.com, https://github.com/edideaur/AOTY-api). That
-// means this endpoint can break if that service goes down or AOTY changes
-// its site — the frontend always has a manual-entry fallback for that reason.
+// wrapper (https://github.com/edideaur/aoty-api). That project moved its
+// production host from aoty.prigoana.com to aoty.prigoana.pw — the old
+// .com host is kept here only as a fallback in case .pw ever goes down.
+// This endpoint can also break if AOTY changes its site — the frontend
+// always has a manual-entry fallback for that reason.
 
-const BASE = "https://aoty.prigoana.com";
+const BASES = ["https://aoty.prigoana.pw", "https://aoty.prigoana.com"];
 
 async function fetchJson(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": "album-tracker (personal project)" },
-  });
-  const text = await res.text();
-  let json = null;
   try {
-    json = JSON.parse(text);
-  } catch {
-    // not JSON — leave json as null, keep raw text for debugging
+    const res = await fetch(url, {
+      headers: { "User-Agent": "album-tracker (personal project)" },
+    });
+    const text = await res.text();
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      // not JSON — leave json as null, keep raw text for debugging
+    }
+    return { ok: res.ok, status: res.status, json, rawText: text.slice(0, 500) };
+  } catch (err) {
+    // network-level failure (DNS, timeout, host down, etc.)
+    return { ok: false, status: 0, json: null, rawText: String(err) };
   }
-  return { ok: res.ok, status: res.status, json, rawText: text.slice(0, 500) };
 }
 
 function normalize(str) {
@@ -35,8 +42,8 @@ function normalize(str) {
 function extractCriticScore(albumData) {
   if (!albumData) return null;
   const raw =
-    albumData.critic_score ??
     albumData.criticScore ??
+    albumData.critic_score ??
     albumData.critic?.score ??
     null;
   if (raw === null || raw === undefined || raw === "NR") return null;
@@ -81,6 +88,16 @@ function pickBestMatch(requestedArtist, requestedAlbum, candidates) {
   return bestScore >= 0 ? best : null;
 }
 
+function candidatesFrom(searchData) {
+  return Array.isArray(searchData?.albums)
+    ? searchData.albums
+    : Array.isArray(searchData?.results)
+    ? searchData.results
+    : Array.isArray(searchData)
+    ? searchData
+    : [];
+}
+
 export default async function handler(req, res) {
   const { artist, album, debug } = req.query;
 
@@ -89,44 +106,53 @@ export default async function handler(req, res) {
     return;
   }
 
-  const trace = {};
+  const trace = { bases: [] };
 
   try {
-    // 1) Search first — more reliable than the "direct" album?artist=&name=
-    // endpoint, which has been observed fuzzy-matching to unrelated/troll
-    // albums instead of returning no result.
-    const searchUrl = `${BASE}/search/albums?q=${encodeURIComponent(`${artist} ${album}`)}`;
-    const searchRes = await fetchJson(searchUrl);
-    trace.search = { url: searchUrl, status: searchRes.status, ok: searchRes.ok, body: searchRes.json ?? searchRes.rawText };
+    let match = null;
+    let usedBase = null;
 
-    const searchData = searchRes.json;
-    const candidates = Array.isArray(searchData?.albums)
-      ? searchData.albums
-      : Array.isArray(searchData?.results)
-      ? searchData.results
-      : Array.isArray(searchData)
-      ? searchData
-      : [];
+    // Try each known host in order. Move on to the next one only if this
+    // host is genuinely unreachable/broken (network error, bad JSON) — not
+    // just because it found no match, since "no match" can be a correct
+    // answer for an obscure album.
+    for (const base of BASES) {
+      const searchUrl = `${base}/search/albums?q=${encodeURIComponent(`${artist} ${album}`)}`;
+      const searchRes = await fetchJson(searchUrl);
+      trace.bases.push({ base, url: searchUrl, status: searchRes.status, ok: searchRes.ok, body: searchRes.json ?? searchRes.rawText });
 
-    const match = pickBestMatch(artist, album, candidates);
+      const hostIsUp = searchRes.status !== 0 && searchRes.json !== null;
+      if (!hostIsUp) continue; // this host is down/broken — try the next one
+
+      usedBase = base;
+      const candidates = candidatesFrom(searchRes.json);
+      match = pickBestMatch(artist, album, candidates);
+      break; // host responded validly — trust its (possibly null) result, don't also query the fallback
+    }
+
     trace.matchedCandidate = match || null;
 
     let score = null;
     let aotyUrl = match?.url || null;
 
     if (match?.url) {
-      // Fetch full detail (search results don't include scores) using the
-      // matched album's page path as the slug.
+      // The search result itself already carries a criticScore field — use
+      // that as a baseline in case the detail lookup below fails for any
+      // reason (rate limiting, a scraping hiccup on AOTY's end, etc).
+      score = extractCriticScore(match);
+
       let slug = match.url;
       try {
         slug = new URL(match.url).pathname; // e.g. /album/29250-kendrick-lamar-to-pimp-a-butterfly.php
       } catch {
         // leave as-is if it wasn't a full URL
       }
-      const bySlugUrl = `${BASE}/album?slug=${encodeURIComponent(slug)}&minimal=true`;
+      const bySlugUrl = `${usedBase}/album?slug=${encodeURIComponent(slug)}&minimal=true`;
       const bySlugRes = await fetchJson(bySlugUrl);
       trace.bySlug = { url: bySlugUrl, status: bySlugRes.status, ok: bySlugRes.ok, body: bySlugRes.json ?? bySlugRes.rawText };
-      score = extractCriticScore(bySlugRes.json);
+
+      const detailScore = extractCriticScore(bySlugRes.json);
+      if (detailScore != null) score = detailScore; // prefer the more detailed lookup when it has one
       aotyUrl = bySlugRes.json?.url || match.url;
     }
 

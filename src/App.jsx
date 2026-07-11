@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
@@ -372,13 +372,15 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
   const [dupError, setDupError] = useState(null);
   const set = (k, v) => { setForm(p => ({...p, [k]: v})); setDupError(null); };
   const submit = async () => {
-    if (!form.artist || !form.album) return;
-    if (isDuplicate && isDuplicate(form.artist, form.album)) {
-      setDupError(`You already have "${form.album.trim()}" by ${form.artist.trim()} saved. Duplicate albums (case-insensitive) aren't allowed.`);
+    const artist = form.artist.trim();
+    const album = form.album.trim();
+    if (!artist || !album) return;
+    if (isDuplicate && isDuplicate(artist, album)) {
+      setDupError(`You already have "${album}" by ${artist} saved. Duplicate albums (case-insensitive) aren't allowed.`);
       return;
     }
     setSaving(true);
-    await onSave(form);
+    await onSave({ ...form, artist, album });
   };
   return (
     <Modal onClose={onClose} theme={theme}>
@@ -517,29 +519,36 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose, on
 
 // ─── ALBUM DETAIL MODAL ──────────────────────────────────────────────────────
 // ─── CRITIC SCORE (AOTY) ─────────────────────────────────────────────────────
+async function fetchCriticScore(artist, album) {
+  try {
+    const r = await fetch(`/api/critic-score?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`);
+    const data = await r.json();
+    return data?.criticScore ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function CriticScoreBlock({ album, onSetCriticScore, theme }) {
-  const [fetching, setFetching] = useState(false);
+  const [fetching, setFetching] = useState(album.criticScore == null);
   const [editing, setEditing] = useState(false);
   const [manualVal, setManualVal] = useState("");
   const [manualError, setManualError] = useState(null);
 
   useEffect(() => {
-    if (album.criticScoreChecked) return;
+    // Only search AOTY if we don't already have a score (manual or found).
+    if (album.criticScore != null) { setFetching(false); return; }
     let cancelled = false;
     setFetching(true);
-    fetch(`/api/critic-score?artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`)
-      .then(r => r.json())
-      .then(data => {
+    fetchCriticScore(album.artist, album.album)
+      .then(score => {
         if (cancelled) return;
-        onSetCriticScore(album.id, data?.criticScore ?? null, data?.criticScore != null ? "aoty" : null);
-      })
-      .catch(() => {
-        if (!cancelled) onSetCriticScore(album.id, null, null);
+        onSetCriticScore(album.id, score, score != null ? "aoty" : null);
       })
       .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [album.id]);
+  }, [album.id, album.criticScore]);
 
   const saveManual = () => {
     const num = parseFloat(manualVal);
@@ -571,11 +580,11 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
         )}
       </div>
 
-      {fetching && !album.criticScoreChecked && (
+      {fetching && (
         <span style={{ fontSize:12, color:theme.muted }}>Checking AOTY…</span>
       )}
 
-      {!fetching && album.criticScoreChecked && album.criticScore == null && !editing && (
+      {!fetching && album.criticScore == null && !editing && (
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>
           <span style={{ fontSize:12, color:theme.muted }}>No critic score found.</span>
           <button onClick={() => { setManualVal(""); setEditing(true); }} style={{
@@ -623,7 +632,7 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
             <div style={{ fontSize:18, fontWeight:800, color:theme.text }}>
               {critic10.toFixed(1)}
               <span style={{ fontSize:10, color:theme.muted, fontWeight:400, marginLeft:4 }}>
-                ({album.criticScore}/100{album.criticScoreSource === "manual" ? ", manual" : ""})
+                ({album.criticScore}/100)
               </span>
             </div>
           </div>
@@ -691,6 +700,32 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
       seen.add(norm);
     }
     setEtError(null);
+
+    // If a track's name matches an existing rating under a differently
+    // typed/cased key for this same album, carry that score over to the
+    // exact key we're about to save instead of leaving a duplicate/orphan.
+    const prefix = cacheKey + "||";
+    const existingByNorm = {};
+    Object.keys(songRatings).forEach(k => {
+      if (!k.startsWith(prefix)) return;
+      existingByNorm[normalize(k.slice(prefix.length))] = k;
+    });
+    const nextRatings = { ...songRatings };
+    let ratingsChanged = false;
+    list.forEach(title => {
+      const exactKey = ratingKey(title);
+      const matchKey = existingByNorm[normalize(title)];
+      if (matchKey && matchKey !== exactKey && nextRatings[exactKey] == null) {
+        nextRatings[exactKey] = nextRatings[matchKey];
+        delete nextRatings[matchKey];
+        ratingsChanged = true;
+      }
+    });
+    if (ratingsChanged) {
+      setSongRatings(nextRatings);
+      persist(SK.songRatings, nextRatings);
+    }
+
     const next = { ...trackCache, [cacheKey]: list };
     setTrackCache(next);
     persist(SK.tracks, next);
@@ -982,8 +1017,46 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
 }
 
 // ─── SETTINGS MODAL ──────────────────────────────────────────────────────────
-function SettingsModal({ settings, setSettings, onClose, theme }) {
+function SettingsModal({ settings, setSettings, onClose, theme, backupData, onImportBackup }) {
   const set = (k, v) => setSettings(p => { const n = {...p, [k]:v}; persist(SK.settings, n); return n; });
+  const fileInputRef = useRef(null);
+  const [importError, setImportError] = useState(null);
+  const [importedOk, setImportedOk] = useState(false);
+
+  const exportBackup = () => {
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `album-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.listened)) {
+          setImportError("That doesn't look like a valid backup file.");
+          setImportedOk(false);
+          return;
+        }
+        onImportBackup(parsed);
+        setImportError(null);
+        setImportedOk(true);
+      } catch {
+        setImportError("Couldn't read that file — make sure it's a backup exported from here.");
+        setImportedOk(false);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
   return (
     <Modal onClose={onClose} theme={theme}>
       <h2 style={{ margin:"0 0 20px", fontSize:16, color:theme.text, fontWeight:700 }}>⚙️ Settings</h2>
@@ -1026,6 +1099,25 @@ function SettingsModal({ settings, setSettings, onClose, theme }) {
           }} onClick={() => set("compactMode", !settings.compactMode)} />
           <span style={{ fontSize:13, color:theme.text }}>Compact mode</span>
         </label>
+      </div>
+      <div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:8, fontWeight:600, letterSpacing:"0.5px", textTransform:"uppercase" }}>Backup</div>
+        <p style={{ fontSize:12, color:theme.muted, margin:"0 0 10px", lineHeight:1.5 }}>
+          Download a copy of every rating, ranking, and note. Keep it somewhere safe as a fallback in case cloud sync ever has a problem.
+        </p>
+        <div style={{ display:"flex", gap:8 }}>
+          <button onClick={exportBackup} style={{
+            flex:1, padding:"9px", background:theme.card, border:`1px solid ${theme.border}`,
+            borderRadius:8, color:theme.text, cursor:"pointer", fontSize:12, fontWeight:600,
+          }}>⬇️ Export backup</button>
+          <button onClick={() => fileInputRef.current?.click()} style={{
+            flex:1, padding:"9px", background:theme.card, border:`1px solid ${theme.border}`,
+            borderRadius:8, color:theme.text, cursor:"pointer", fontSize:12, fontWeight:600,
+          }}>⬆️ Import backup</button>
+          <input ref={fileInputRef} type="file" accept="application/json" onChange={handleImportFile} style={{ display:"none" }} />
+        </div>
+        {importError && <div style={{ fontSize:11, color:"#f87171", marginTop:8 }}>{importError}</div>}
+        {importedOk && !importError && <div style={{ fontSize:11, color:"#22c55e", marginTop:8 }}>Backup restored.</div>}
       </div>
     </Modal>
   );
@@ -1128,7 +1220,139 @@ function SectionHeading({ children, theme }) {
   );
 }
 
-function StatsPage({ listened, songRatings, trackCache, theme, isMobile }) {
+// ─── CRITIC COMPARISON (stats page) ─────────────────────────────────────────
+// Auto-fills critic scores for rated albums that don't have one yet (same
+// "search AOTY only while empty" rule as the album detail modal), then shows
+// how the person's ratings stack up against critics: a scatter of you-vs-them
+// plus a distribution of the differences. Anything AOTY can't find gets a
+// quick manual-entry row right here instead of making you open each album.
+function CriticComparisonSection({ ratedAlbums, onSetCriticScore, theme, isMobile }) {
+  const [checkedIds, setCheckedIds] = useState(() => new Set());
+  const inFlight = useRef(new Set());
+
+  useEffect(() => {
+    ratedAlbums.forEach(a => {
+      if (a.criticScore != null) return;
+      if (inFlight.current.has(a.id)) return;
+      if (checkedIds.has(a.id)) return; // already searched once this visit to the stats page
+      inFlight.current.add(a.id);
+      fetchCriticScore(a.artist, a.album)
+        .then(score => {
+          onSetCriticScore(a.id, score, score != null ? "aoty" : null);
+        })
+        .finally(() => {
+          inFlight.current.delete(a.id);
+          setCheckedIds(prev => new Set(prev).add(a.id));
+        });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ratedAlbums]);
+
+  const withCritic = ratedAlbums.filter(a => a.criticScore != null);
+  const stillFetching = ratedAlbums.filter(a => a.criticScore == null && !checkedIds.has(a.id));
+  const missing = ratedAlbums.filter(a => a.criticScore == null && checkedIds.has(a.id));
+
+  const diffs = withCritic.map(a => a.rating - a.criticScore / 10);
+  const avgDiff = diffs.length ? diffs.reduce((s, d) => s + d, 0) / diffs.length : null;
+  const avgCritic = withCritic.length ? withCritic.reduce((s, a) => s + a.criticScore / 10, 0) / withCritic.length : null;
+
+  // diff histogram: -5..+5 in 1-point buckets, centered on 0
+  const diffBuckets = Array.from({ length: 10 }, () => 0); // -5..-4 ... 4..5
+  diffs.forEach(d => {
+    const idx = Math.min(9, Math.max(0, Math.floor(d + 5)));
+    diffBuckets[idx]++;
+  });
+  const maxDiffBucket = Math.max(...diffBuckets, 1);
+
+  return (
+    <div style={{ marginBottom:30 }}>
+      <SectionHeading theme={theme}>You vs. critics (AOTY)</SectionHeading>
+
+      {withCritic.length === 0 && stillFetching.length > 0 && (
+        <div style={{ fontSize:12, color:theme.muted, padding:"10px 0" }}>Looking up critic scores on AOTY…</div>
+      )}
+
+      {withCritic.length === 0 && stillFetching.length === 0 && missing.length > 0 && (
+        <div style={{ fontSize:12, color:theme.muted, padding:"10px 0" }}>
+          AOTY didn't have a critic score for any of your rated albums yet — add some below.
+        </div>
+      )}
+
+      {withCritic.length > 0 && (
+        <>
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap", marginBottom:18 }}>
+            <StatCard label="Albums compared" value={withCritic.length} theme={theme} />
+            <StatCard label="Avg critic score" value={avgCritic != null ? avgCritic.toFixed(2) : "—"} theme={theme} />
+            <StatCard label="Avg you vs. critics"
+              value={avgDiff != null ? (avgDiff > 0 ? `+${avgDiff.toFixed(2)}` : avgDiff.toFixed(2)) : "—"}
+              sub={avgDiff != null ? (avgDiff > 0 ? "you rate higher" : avgDiff < 0 ? "you rate lower" : "dead even") : null}
+              theme={theme} />
+          </div>
+
+          <div>
+            <div style={{ fontSize:11, color:theme.muted, marginBottom:6 }}>Distribution of (you − critics)</div>
+            {diffBuckets.map((count, i) => {
+              const lo = i - 5;
+              return (
+                <StatBar key={i} label={`${lo >= 0 ? "+" : ""}${lo} to ${lo+1 >= 0 ? "+" : ""}${lo+1}`}
+                  value={count} max={maxDiffBucket}
+                  color={lo + 0.5 >= 0 ? "#22c55e" : "#f87171"} theme={theme} />
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {missing.length > 0 && (
+        <div style={{ marginTop:18 }}>
+          <div style={{ fontSize:11, color:theme.muted, marginBottom:8 }}>
+            No AOTY critic score found for these — enter one to include them in the comparison:
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+            {missing.map(a => (
+              <MissingCriticRow key={a.id} album={a} onSetCriticScore={onSetCriticScore} theme={theme} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MissingCriticRow({ album, onSetCriticScore, theme }) {
+  const [val, setVal] = useState("");
+  const [error, setError] = useState(null);
+
+  const save = () => {
+    const num = parseFloat(val);
+    if (isNaN(num) || num < 0 || num > 100) {
+      setError("0–100");
+      return;
+    }
+    onSetCriticScore(album.id, Math.round(num), "manual");
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", background:theme.card,
+      borderRadius:8, border:`1px solid ${theme.border}` }}>
+      <div style={{ flex:1, minWidth:0, fontSize:12, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+        {album.artist} <span style={{ color:theme.muted }}>·</span> {album.album}
+      </div>
+      <input
+        type="number" min="0" max="100" value={val}
+        onChange={e => { setVal(e.target.value); setError(null); }}
+        placeholder="e.g. 84"
+        style={{ width:64, background:theme.surface, border:`1px solid ${theme.border}`,
+          borderRadius:6, padding:"4px 7px", color:theme.text, fontSize:12, outline:"none" }}
+      />
+      <button onClick={save} style={{ padding:"4px 10px", background:theme.accent, border:"none",
+        borderRadius:6, color:"#fff", fontWeight:700, fontSize:11, cursor:"pointer" }}>Save</button>
+      {error && <span style={{ fontSize:10, color:"#f87171" }}>{error}</span>}
+    </div>
+  );
+}
+
+function StatsPage({ listened, songRatings, trackCache, theme, isMobile, onSetCriticScore }) {
   const ratedAlbums = listened.filter(a => a.rating != null);
   const avgAlbum = ratedAlbums.length ? ratedAlbums.reduce((s, a) => s + a.rating, 0) / ratedAlbums.length : null;
 
@@ -1236,7 +1460,7 @@ function StatsPage({ listened, songRatings, trackCache, theme, isMobile }) {
       )}
 
       {decadeEntries.length > 0 && (
-        <div>
+        <div style={{ marginBottom:30 }}>
           <SectionHeading theme={theme}>Albums by decade</SectionHeading>
           <div style={{ display:"flex", alignItems:"flex-end", gap:8, height:120, paddingBottom:4 }}>
             {decadeEntries.map(([decade, count]) => (
@@ -1252,6 +1476,10 @@ function StatsPage({ listened, songRatings, trackCache, theme, isMobile }) {
             ))}
           </div>
         </div>
+      )}
+
+      {ratedAlbums.length > 0 && (
+        <CriticComparisonSection ratedAlbums={ratedAlbums} onSetCriticScore={onSetCriticScore} theme={theme} isMobile={isMobile} />
       )}
     </div>
   );
@@ -1337,34 +1565,52 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   useEffect(() => { persist(SK.songOrder, songOrder); }, [songOrder]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
 
+  // Guards the very first render(s): the initial `listened` state is
+  // whatever's in localStorage/seed data, loaded synchronously before the
+  // cloud fetch below has a chance to finish. Without this flag, the
+  // save-effect a few lines down could fire on that stale local snapshot
+  // and overwrite the real cloud data with it — this is the single biggest
+  // data-loss risk in the sync setup, so we simply never save to the cloud
+  // until we know what's actually there.
+  const [cloudLoaded, setCloudLoaded] = useState(false);
+
 useEffect(() => {
   async function autoLoad() {
-    const { data, error } = await supabase
-      .from("app_data")
-      .select("data")
-      .eq("id", 8)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("app_data")
+        .select("data")
+        .eq("id", 8)
+        .single();
 
-    if (error) {
-      console.error(error);
-      return;
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      const cloud = data.data;
+      // Guard against a null/empty row wiping out perfectly good local
+      // data — only apply cloud state for fields that actually came back.
+      if (cloud && typeof cloud === "object") {
+        if (Array.isArray(cloud.listened)) setListened(cloud.listened);
+        if (cloud.trackCache) setTrackCache(cloud.trackCache);
+        if (cloud.songRatings) setSongRatings(cloud.songRatings);
+        if (cloud.settings) setSettings(cloud.settings);
+        if (Array.isArray(cloud.albumOrder)) setAlbumOrder(cloud.albumOrder);
+        if (Array.isArray(cloud.songOrder)) setSongOrder(cloud.songOrder);
+        if (Array.isArray(cloud.deletedListened)) setDeletedListened(cloud.deletedListened);
+      }
+    } finally {
+      setCloudLoaded(true);
     }
-
-    const cloud = data.data;
-
-    setListened(cloud.listened || []);
-    setTrackCache(cloud.trackCache || {});
-    setSongRatings(cloud.songRatings || {});
-    setSettings(cloud.settings || settings);
-    setAlbumOrder(cloud.albumOrder || []);
-    setSongOrder(cloud.songOrder || []);
-    setDeletedListened(cloud.deletedListened || []);
   }
 
   autoLoad();
 }, []);
 
 useEffect(() => {
+  if (!cloudLoaded) return; // never save over the cloud before we know what's actually in it
+
   const timer = setTimeout(async () => {
     const payload = {
       listened,
@@ -1376,16 +1622,18 @@ useEffect(() => {
       deletedListened,
     };
 
-    await supabase
+    const { error } = await supabase
       .from("app_data")
       .update({ data: payload })
       .eq("id", 8);
 
-    console.log("Auto-saved to cloud");
+    if (error) console.error("Cloud auto-save failed:", error);
+    else console.log("Auto-saved to cloud");
   }, 2000);
 
   return () => clearTimeout(timer);
 }, [
+  cloudLoaded,
   listened,
   trackCache,
   songRatings,
@@ -1394,6 +1642,16 @@ useEffect(() => {
   songOrder,
   deletedListened,
 ]);
+
+  const handleImportBackup = (parsed) => {
+    if (Array.isArray(parsed.listened)) setListened(parsed.listened);
+    if (parsed.trackCache) setTrackCache(parsed.trackCache);
+    if (parsed.songRatings) setSongRatings(parsed.songRatings);
+    if (parsed.settings) setSettings(parsed.settings);
+    if (Array.isArray(parsed.albumOrder)) setAlbumOrder(parsed.albumOrder);
+    if (Array.isArray(parsed.songOrder)) setSongOrder(parsed.songOrder);
+    if (Array.isArray(parsed.deletedListened)) setDeletedListened(parsed.deletedListened);
+  };
 
   // ── helpers to check if an album has any song data ──────────────────────
   const albumHasData = (album) => {
@@ -1450,7 +1708,44 @@ useEffect(() => {
 
   const handleEdit = (form, id) => {
     if (isDuplicateAlbum(form.artist, form.album, id)) return;
+    const prevAlbum = listened.find(a => a.id === id);
+    const renamed = prevAlbum && (prevAlbum.artist !== form.artist || prevAlbum.album !== form.album);
+
     setListened(prev => prev.map(a => a.id===id ? {...a,...form,year:parseInt(form.year)} : a));
+
+    // A rename shouldn't orphan the tracklist/ratings that were tied to the
+    // old artist/album string — move them to the new key so they follow the
+    // album across the edit (and back again, if the name reverts later).
+    if (renamed) {
+      const oldKey = `${prevAlbum.artist}||${prevAlbum.album}`;
+      const newKey = `${form.artist}||${form.album}`;
+
+      setTrackCache(prev => {
+        if (!(oldKey in prev)) return prev;
+        const { [oldKey]: oldTracks, ...rest } = prev;
+        const keepExisting = Array.isArray(rest[newKey]) && rest[newKey].length > 0;
+        const next = { ...rest, [newKey]: keepExisting ? rest[newKey] : oldTracks };
+        persist(SK.tracks, next);
+        return next;
+      });
+
+      setSongRatings(prev => {
+        const oldPrefix = oldKey + "||";
+        const newPrefix = newKey + "||";
+        let changed = false;
+        const next = { ...prev };
+        Object.keys(prev).forEach(k => {
+          if (!k.startsWith(oldPrefix)) return;
+          const nk = newPrefix + k.slice(oldPrefix.length);
+          if (next[nk] == null) next[nk] = next[k];
+          delete next[k];
+          changed = true;
+        });
+        if (changed) persist(SK.songRatings, next);
+        return changed ? next : prev;
+      });
+    }
+
     setEditModal(null);
   };
 
@@ -1877,7 +2172,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
 
       {/* ══ STATS ════════════════════════════════════════════════════════════ */}
       {tab === "stats" && (
-        <StatsPage listened={listened} songRatings={songRatings} trackCache={trackCache} theme={theme} isMobile={isMobile} />
+        <StatsPage listened={listened} songRatings={songRatings} trackCache={trackCache} theme={theme} isMobile={isMobile} onSetCriticScore={setCriticScore} />
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════════ */}
@@ -1931,7 +2226,10 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
       )}
       {showSettings && (
         <SettingsModal settings={settings} setSettings={setSettings}
-          onClose={() => setShowSettings(false)} theme={theme} />
+          onClose={() => setShowSettings(false)} theme={theme}
+          backupData={{ listened, trackCache, songRatings, settings, albumOrder, songOrder, deletedListened }}
+          onImportBackup={handleImportBackup}
+        />
       )}
     </div>
   );
