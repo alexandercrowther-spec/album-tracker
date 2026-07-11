@@ -141,19 +141,20 @@ export default async function handler(req, res) {
       // reason (rate limiting, a scraping hiccup on AOTY's end, etc).
       score = extractCriticScore(match);
 
-      let slug = match.url;
-      try {
-        slug = new URL(match.url).pathname; // e.g. /album/29250-kendrick-lamar-to-pimp-a-butterfly.php
-      } catch {
-        // leave as-is if it wasn't a full URL
-      }
-      const bySlugUrl = `${usedBase}/album?slug=${encodeURIComponent(slug)}&minimal=true`;
-      const bySlugRes = await fetchJson(bySlugUrl);
-      trace.bySlug = { url: bySlugUrl, status: bySlugRes.status, ok: bySlugRes.ok, body: bySlugRes.json ?? bySlugRes.rawText };
+      // The /album detail endpoint accepts either a `slug` or an
+      // (artist, name) pair. We used to derive a slug from match.url, but
+      // aoty.prigoana.pw's slug format (e.g. "2915-outkast-aquemini")
+      // doesn't match what we built from the URL, so that lookup silently
+      // found nothing. Passing the artist/title AOTY's own search already
+      // gave us sidesteps slug-guessing entirely and is a documented,
+      // supported way to call this endpoint.
+      const byNameUrl = `${usedBase}/album?artist=${encodeURIComponent(match.artist)}&name=${encodeURIComponent(match.title)}&minimal=true`;
+      const byNameRes = await fetchJson(byNameUrl);
+      trace.byName = { url: byNameUrl, status: byNameRes.status, ok: byNameRes.ok, body: byNameRes.json ?? byNameRes.rawText };
 
-      const detailScore = extractCriticScore(bySlugRes.json);
+      const detailScore = extractCriticScore(byNameRes.json);
       if (detailScore != null) score = detailScore; // prefer the more detailed lookup when it has one
-      aotyUrl = bySlugRes.json?.url || match.url;
+      aotyUrl = byNameRes.json?.url || match.url;
     }
 
     res.status(200).json({

@@ -519,14 +519,40 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose, on
 
 // ─── ALBUM DETAIL MODAL ──────────────────────────────────────────────────────
 // ─── CRITIC SCORE (AOTY) ─────────────────────────────────────────────────────
-async function fetchCriticScore(artist, album) {
+async function fetchCriticScore(artist, album, { debug = false } = {}) {
   try {
-    const r = await fetch(`/api/critic-score?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`);
+    const url = `/api/critic-score?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}${debug ? "&debug=true" : ""}`;
+    const r = await fetch(url);
     const data = await r.json();
-    return data?.criticScore ?? null;
-  } catch {
-    return null;
+    return { score: data?.criticScore ?? null, debug: data?.debug ?? null, error: data?.error ?? null };
+  } catch (err) {
+    return { score: null, debug: null, error: String(err) };
   }
+}
+
+// Turns the raw debug trace from api/critic-score.js into a short, readable
+// summary so a "no score found" case can be understood without opening
+// devtools — e.g. "AOTY has it listed under a different title" vs "AOTY
+// genuinely has nothing for this one" vs "the lookup service itself failed".
+function summarizeCriticDebug(trace, error) {
+  if (error) return `The lookup itself failed: ${error}`;
+  if (!trace) return "No diagnostic info came back with this response.";
+  const lines = [];
+  (trace.bases || []).forEach(b => {
+    const body = b.body;
+    let list = [];
+    if (body && typeof body === "object") {
+      list = Array.isArray(body.albums) ? body.albums : Array.isArray(body.results) ? body.results : Array.isArray(body) ? body : [];
+    }
+    const sample = list.slice(0, 3).map(c => `"${c.title || "?"}" by ${c.artist || "?"}`).join("; ");
+    lines.push(`${b.base} → HTTP ${b.status}${b.ok ? "" : " (not ok)"}, ${list.length} result(s)${sample ? ": " + sample : ""}`);
+  });
+  if (trace.matchedCandidate) {
+    lines.push(`Best match accepted: "${trace.matchedCandidate.title}" by ${trace.matchedCandidate.artist}`);
+  } else {
+    lines.push("None of the results were a close enough artist+title match, so nothing was accepted.");
+  }
+  return lines.join("\n");
 }
 
 function CriticScoreBlock({ album, onSetCriticScore, theme }) {
@@ -534,16 +560,20 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
   const [editing, setEditing] = useState(false);
   const [manualVal, setManualVal] = useState("");
   const [manualError, setManualError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     // Only search AOTY if we don't already have a score (manual or found).
     if (album.criticScore != null) { setFetching(false); return; }
     let cancelled = false;
     setFetching(true);
-    fetchCriticScore(album.artist, album.album)
-      .then(score => {
+    setShowDebug(false);
+    fetchCriticScore(album.artist, album.album, { debug: true })
+      .then(({ score, debug, error }) => {
         if (cancelled) return;
         onSetCriticScore(album.id, score, score != null ? "aoty" : null);
+        setDebugInfo(summarizeCriticDebug(debug, error));
       })
       .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
@@ -585,12 +615,26 @@ function CriticScoreBlock({ album, onSetCriticScore, theme }) {
       )}
 
       {!fetching && album.criticScore == null && !editing && (
-        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-          <span style={{ fontSize:12, color:theme.muted }}>No critic score found.</span>
-          <button onClick={() => { setManualVal(""); setEditing(true); }} style={{
-            background:"none", border:`1px solid ${theme.border}`, borderRadius:6,
-            color:theme.text, cursor:"pointer", fontSize:11, padding:"3px 8px",
-          }}>+ Enter manually</button>
+        <div>
+          <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontSize:12, color:theme.muted }}>No critic score found.</span>
+            <button onClick={() => { setManualVal(""); setEditing(true); }} style={{
+              background:"none", border:`1px solid ${theme.border}`, borderRadius:6,
+              color:theme.text, cursor:"pointer", fontSize:11, padding:"3px 8px",
+            }}>+ Enter manually</button>
+            {debugInfo && (
+              <button onClick={() => setShowDebug(s => !s)} style={{
+                background:"none", border:"none", color:theme.muted, textDecoration:"underline",
+                cursor:"pointer", fontSize:11, padding:0,
+              }}>{showDebug ? "hide details" : "why?"}</button>
+            )}
+          </div>
+          {showDebug && debugInfo && (
+            <pre style={{
+              fontSize:10, color:theme.muted, marginTop:8, whiteSpace:"pre-wrap",
+              wordBreak:"break-word", fontFamily:"monospace", lineHeight:1.5,
+            }}>{debugInfo}</pre>
+          )}
         </div>
       )}
 
@@ -1237,7 +1281,7 @@ function CriticComparisonSection({ ratedAlbums, onSetCriticScore, theme, isMobil
       if (checkedIds.has(a.id)) return; // already searched once this visit to the stats page
       inFlight.current.add(a.id);
       fetchCriticScore(a.artist, a.album)
-        .then(score => {
+        .then(({ score }) => {
           onSetCriticScore(a.id, score, score != null ? "aoty" : null);
         })
         .finally(() => {
