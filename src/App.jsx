@@ -2215,6 +2215,28 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   const [localUpdatedAt, setLocalUpdatedAt] = useState(() => loadLS(SK.updatedAt, 0));
   const localUpdatedAtRef = useRef(localUpdatedAt);
   localUpdatedAtRef.current = localUpdatedAt;
+  // The cloud auto-load effect below only runs once on mount, so anything
+  // it reads via closure is frozen at whatever it was when the effect was
+  // created — NOT whatever it is by the time the (async) cloud fetch
+  // actually resolves. Without these refs, an edit made in that window
+  // (e.g. rating a song while the cloud fetch is still in flight) would
+  // get silently discarded the moment the merge fires and overwrites state
+  // with the stale mount-time snapshot. Mirrors the localUpdatedAtRef
+  // pattern already used above for the same reason.
+  const listenedRef = useRef(listened);
+  listenedRef.current = listened;
+  const trackCacheRef = useRef(trackCache);
+  trackCacheRef.current = trackCache;
+  const songRatingsRef = useRef(songRatings);
+  songRatingsRef.current = songRatings;
+  const albumOrderRef = useRef(albumOrder);
+  albumOrderRef.current = albumOrder;
+  const songOrderRef = useRef(songOrder);
+  songOrderRef.current = songOrder;
+  const deletedListenedRef = useRef(deletedListened);
+  deletedListenedRef.current = deletedListened;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   // Set right before a batch of setState calls that represent data ARRIVING
   // (from the cloud or a backup import) rather than the person editing
   // something, so that arrival doesn't get mistaken for a brand-new local
@@ -2277,25 +2299,33 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
         // actually conflict, never the fields that don't.
         const cloudWins = cloudUpdatedAt > localAt;
 
+        const currentListened = listenedRef.current;
+        const currentTrackCache = trackCacheRef.current;
+        const currentSongRatings = songRatingsRef.current;
+        const currentAlbumOrder = albumOrderRef.current;
+        const currentSongOrder = songOrderRef.current;
+        const currentDeletedListened = deletedListenedRef.current;
+        const currentSettings = settingsRef.current;
+
         const deletedUnion = Array.from(new Set([
-          ...(deletedListened || []),
+          ...(currentDeletedListened || []),
           ...(Array.isArray(cloud.deletedListened) ? cloud.deletedListened : []),
         ]));
 
         const mergedListenedRaw = cloudWins
-          ? mergeListened(listened, Array.isArray(cloud.listened) ? cloud.listened : [])
-          : mergeListened(Array.isArray(cloud.listened) ? cloud.listened : [], listened);
+          ? mergeListened(currentListened, Array.isArray(cloud.listened) ? cloud.listened : [])
+          : mergeListened(Array.isArray(cloud.listened) ? cloud.listened : [], currentListened);
         const finalListened = mergedListenedRaw.filter(a => !deletedUnion.includes(a.id));
 
         const mergedTracks = cloudWins
-          ? mergeKeyed(trackCache, cloud.trackCache)
-          : mergeKeyed(cloud.trackCache, trackCache);
+          ? mergeKeyed(currentTrackCache, cloud.trackCache)
+          : mergeKeyed(cloud.trackCache, currentTrackCache);
         const mergedRatings = cloudWins
-          ? mergeKeyed(songRatings, cloud.songRatings)
-          : mergeKeyed(cloud.songRatings, songRatings);
-        const mergedAlbumOrder = cloudWins && Array.isArray(cloud.albumOrder) ? cloud.albumOrder : albumOrder;
-        const mergedSongOrder  = cloudWins && Array.isArray(cloud.songOrder)  ? cloud.songOrder  : songOrder;
-        const mergedSettings = cloudWins && cloud.settings ? cloud.settings : settings;
+          ? mergeKeyed(currentSongRatings, cloud.songRatings)
+          : mergeKeyed(cloud.songRatings, currentSongRatings);
+        const mergedAlbumOrder = cloudWins && Array.isArray(cloud.albumOrder) ? cloud.albumOrder : currentAlbumOrder;
+        const mergedSongOrder  = cloudWins && Array.isArray(cloud.songOrder)  ? cloud.songOrder  : currentSongOrder;
+        const mergedSettings = cloudWins && cloud.settings ? cloud.settings : currentSettings;
         const finalUpdatedAt = Math.max(cloudUpdatedAt, localAt);
 
         suppressTimestampBump.current = true;
