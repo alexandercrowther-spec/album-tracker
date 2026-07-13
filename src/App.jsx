@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
 import { SEED_LISTENED } from "./seedData";
+import { loadLS, persist, SK, loadWithIntegrityCheck } from "./storageManager";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
   hiphop:           { label: "Hip-Hop", color: "#f87171" },
@@ -381,33 +382,100 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
   const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop", cover:"" });
   const [saving, setSaving] = useState(false);
   const [dupError, setDupError] = useState(null);
-  const set = (k, v) => { setForm(p => ({...p, [k]: v})); setDupError(null); };
+  const [yearError, setYearError] = useState(null);
+  // Tracks which exact iTunes release (if any) the person confirmed via
+  // search, so the tracklist fetched on save matches precisely what they
+  // saw in the results list instead of re-guessing from scratch.
+  const [confirmedId, setConfirmedId] = useState(initial?.__collectionId || null);
+  const [confirmedLabel, setConfirmedLabel] = useState(null);
+  const [showSearch, setShowSearch] = useState(mode !== "edit");
+
+  const set = (k, v) => {
+    setForm(p => ({...p, [k]: v}));
+    setDupError(null);
+    // Any manual edit to artist/album invalidates a previously-confirmed
+    // search match, since it no longer necessarily describes that release.
+    if (k === "artist" || k === "album") { setConfirmedId(null); setConfirmedLabel(null); }
+  };
+
+  const handlePick = (r) => {
+    setForm(p => ({
+      ...p,
+      artist: r.artist || p.artist,
+      album: r.album || p.album,
+      year: r.year || p.year,
+      cover: r.cover || p.cover,
+    }));
+    setConfirmedId(r.collectionId);
+    setConfirmedLabel(`${r.album} — ${r.artist}${r.year ? ` (${r.year})` : ""}`);
+    setDupError(null);
+    setShowSearch(false);
+  };
+
   const submit = async () => {
     const artist = form.artist.trim();
     const album = form.album.trim();
     if (!artist || !album) return;
+    const yearNum = parseInt(form.year, 10);
+    if (form.year !== "" && (isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 1)) {
+      setYearError("Enter a valid year.");
+      return;
+    }
+    setYearError(null);
     if (isDuplicate && isDuplicate(artist, album)) {
       setDupError(`You already have "${album}" by ${artist} saved. Duplicate albums (case-insensitive) aren't allowed.`);
       return;
     }
     setSaving(true);
-    await onSave({ ...form, artist, album });
+    await onSave({ ...form, artist, album, year: form.year === "" ? "" : yearNum, __collectionId: confirmedId });
   };
+
+  const onFieldKeyDown = e => { if (e.key === "Enter") { e.preventDefault(); submit(); } };
+
   return (
     <Modal onClose={onClose} theme={theme}>
-      <h2 style={{ margin:"0 0 18px", fontSize:16, color:theme.text, fontWeight:700 }}>
+      <h2 style={{ margin:"0 0 14px", fontSize:16, color:theme.text, fontWeight:700 }}>
         {mode === "edit" ? "Edit album" : "Add album"}
       </h2>
-      {[["Artist","artist","text"],["Album title","album","text"],["Year","year","number"]].map(([label,key,type]) => (
+
+      {mode !== "edit" && (
+        <div style={{ marginBottom:14 }}>
+          {showSearch ? (
+            <AlbumSearchPicker theme={theme} defaultQuery="" onPick={handlePick} />
+          ) : (
+            <button onClick={() => setShowSearch(true)} style={{
+              width:"100%", padding:"8px", background:"transparent",
+              border:`1px dashed ${theme.border}`, borderRadius:8,
+              color:theme.muted, cursor:"pointer", fontSize:12, marginBottom:2,
+            }}>🔍 Search iTunes to confirm the exact release</button>
+          )}
+          {confirmedLabel && (
+            <div style={{ fontSize:11, color:theme.accent, marginTop:8, lineHeight:1.5 }}>
+              ✓ Matched to: {confirmedLabel}. Its tracklist and cover will be used automatically.
+            </div>
+          )}
+        </div>
+      )}
+
+      {[["Artist","artist"],["Album title","album"]].map(([label,key]) => (
         <div key={key} style={{ marginBottom:12 }}>
           <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>{label}</div>
-          <input type={type} value={form[key]}
-            onChange={e => set(key, type==="number" ? parseInt(e.target.value)||"" : e.target.value)}
+          <input type="text" value={form[key]} onKeyDown={onFieldKeyDown}
+            onChange={e => set(key, e.target.value)}
             style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
               borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
           />
         </div>
       ))}
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Year</div>
+        <input type="number" value={form.year} onKeyDown={onFieldKeyDown}
+          onChange={e => { setForm(p => ({...p, year: e.target.value === "" ? "" : parseInt(e.target.value, 10)})); setYearError(null); }}
+          style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
+        />
+        {yearError && <div style={{ fontSize:11, color:"#f87171", marginTop:4 }}>{yearError}</div>}
+      </div>
       <div style={{ marginBottom:12 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
@@ -422,6 +490,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
         <input
           type="text"
           value={form.cover || ""}
+          onKeyDown={onFieldKeyDown}
           onChange={e => set("cover", e.target.value)}
           placeholder="https://..."
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
@@ -429,9 +498,9 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
             outline:"none", boxSizing:"border-box" }}
         />
       </div>
-      {mode !== "edit" && (
+      {mode !== "edit" && !confirmedLabel && (
         <div style={{ fontSize:11, color:theme.muted, marginBottom:14 }}>
-          Cover art and the tracklist are looked up automatically once you add the album.
+          If you don't search first, we'll auto-guess the best match and its tracklist once you add the album — you can re-fetch or edit the tracklist later if it's wrong.
         </div>
       )}
       {dupError && (
@@ -706,25 +775,16 @@ function CriticScoreBlock({ album, onSetCriticScore, theme, showDebugTools }) {
   );
 }
 
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore, showDebugTools }) {
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore, showDebugTools, onUpdateAlbumCover }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
-  const [loading, setLoading] = useState(!tracks);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState("tracks");
   const [activeSong, setActiveSong] = useState(null);
   const [editTracks, setEditTracks] = useState(null);
   const [etError, setEtError] = useState(null);
-
-  useEffect(() => {
-  if (!tracks) {
-    const next = { ...trackCache, [cacheKey]: [] };
-    setTrackCache(next);
-    persist(SK.tracks, next);
-  }
-
-  setLoading(false);
-}, []);
+  const [applyMsg, setApplyMsg] = useState(null);
 
   const ratingKey = s => `${cacheKey}||${s}`;
 
@@ -798,11 +858,47 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
     return next;
   });
 
+  const applyPickedRelease = async (r) => {
+    setLoading(true);
+    setError(null);
+    const fetchedTracks = await fetchTracksForCollection(r.collectionId);
+    if (!fetchedTracks.length) {
+      setError("That release didn't return any tracks — try a different result, or add tracks manually.");
+      setLoading(false);
+      return;
+    }
+    const next = { ...trackCache, [cacheKey]: fetchedTracks };
+    setTrackCache(next);
+    persist(SK.tracks, next);
+    if (r.cover && onUpdateAlbumCover) onUpdateAlbumCover(album.id, r.cover);
+    setApplyMsg(`Tracklist updated from "${r.album}" (${fetchedTracks.length} tracks).`);
+    setLoading(false);
+    setView("tracks");
+  };
+
   const c = GENRES[album.genre]?.color || "#888";
-  const currentTracks = trackCache[cacheKey];
+  const currentTracks = tracks; // undefined = never fetched/found; [] explicit-empty only after a real lookup returned nothing
+  const hasTracklist = Array.isArray(currentTracks) && currentTracks.length > 0;
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
+      {view === "search" && (
+        <>
+          <button onClick={() => { setView("tracks"); setError(null); }} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 10px", display:"flex", alignItems:"center", gap:4 }}>
+            ← back
+          </button>
+          <h3 style={{ margin:"0 0 2px", color:theme.text, fontSize:15 }}>Find the correct release</h3>
+          <p style={{ margin:"0 0 12px", fontSize:13, color:theme.muted }}>
+            Pick the exact release on iTunes — its tracklist (and cover) will replace what's saved now.
+          </p>
+          {loading && <div style={{ color:theme.muted, fontSize:13, marginBottom:10 }}>Applying tracklist…</div>}
+          {error && (
+            <div style={{ color:"#f87171", fontSize:12, marginBottom:10, background:"#f8717118", border:"1px solid #f8717133", borderRadius:8, padding:"9px 11px", lineHeight:1.5 }}>{error}</div>
+          )}
+          <AlbumSearchPicker theme={theme} defaultQuery={`${album.artist} ${album.album}`} autoRun onPick={applyPickedRelease} />
+        </>
+      )}
+
       {view === "edit" && editTracks && (
         <>
           <button onClick={() => setView("tracks")} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 10px", display:"flex", alignItems:"center", gap:4 }}>
@@ -881,15 +977,20 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
           </div>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
           <CriticScoreBlock album={album} onSetCriticScore={onSetCriticScore} theme={theme} showDebugTools={showDebugTools} />
-          {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
+          {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Updating tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
-          <div style={{ display:"flex", justifyContent:"flex-end", marginBottom:8 }}>
+          {applyMsg && <div style={{ color:theme.accent, fontSize:12, marginBottom:10 }}>{applyMsg}</div>}
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginBottom:8 }}>
+            <button onClick={() => { setError(null); setApplyMsg(null); setView("search"); }} style={{
+              padding:"4px 10px", background:theme.card, border:`1px solid ${theme.border}`,
+              borderRadius:6, color:theme.muted, cursor:"pointer", fontSize:11,
+            }}>🔍 Find correct release</button>
             <button onClick={openEditTracks} style={{
               padding:"4px 10px", background:theme.card, border:`1px solid ${theme.border}`,
               borderRadius:6, color:theme.muted, cursor:"pointer", fontSize:11,
             }}>✏️ Edit tracklist</button>
           </div>
-          {currentTracks && (
+          {hasTracklist && (
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               {currentTracks.map((song, i) => {
                 const sr = songRatings[ratingKey(song)];
@@ -913,12 +1014,24 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
               })}
             </div>
           )}
-          {!currentTracks && !loading && (
-            <button onClick={openEditTracks} style={{
-              width:"100%", padding:"10px", background:theme.card,
-              border:`1px dashed ${theme.border}`, borderRadius:8,
-              color:theme.muted, cursor:"pointer", fontSize:13,
-            }}>+ Add tracks manually</button>
+          {!hasTracklist && !loading && (
+            <div style={{ textAlign:"center", padding:"20px 0 4px" }}>
+              <div style={{ fontSize:13, color:theme.muted, marginBottom:12 }}>
+                No tracklist yet for this album.
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <button onClick={() => { setError(null); setApplyMsg(null); setView("search"); }} style={{
+                  width:"100%", padding:"10px", background:theme.card,
+                  border:`1px dashed ${theme.border}`, borderRadius:8,
+                  color:theme.text, cursor:"pointer", fontSize:13, fontWeight:600,
+                }}>🔍 Search iTunes for the tracklist</button>
+                <button onClick={openEditTracks} style={{
+                  width:"100%", padding:"10px", background:"transparent",
+                  border:`1px dashed ${theme.border}`, borderRadius:8,
+                  color:theme.muted, cursor:"pointer", fontSize:13,
+                }}>+ Add tracks manually</button>
+              </div>
+            </div>
           )}
         </>
       )}
@@ -1315,45 +1428,157 @@ function pickBestAlbumMatch(results, artist, album) {
   return best || results[0] || null;
 }
 
-async function getAlbumInfo(artist, album) {
+// Fetches the tracklist for a *specific, known* iTunes collection id — no
+// fuzzy matching involved, since the caller already knows exactly which
+// release they want (either from a search pick or a previous auto-match).
+async function fetchTracksForCollection(collectionId) {
   try {
-    const q = encodeURIComponent(`${artist} ${album}`);
-    const res = await fetch(
-      `https://itunes.apple.com/search?term=${q}&entity=album&limit=25`
+    const lookupRes = await fetch(
+      `https://itunes.apple.com/lookup?id=${collectionId}&entity=song`
     );
-    const data = await res.json();
-
-    if (!data.results?.length) return { cover: null, tracks: [] };
-
-    const result = pickBestAlbumMatch(data.results, artist, album);
-    if (!result) return { cover: null, tracks: [] };
-    const cover = result.artworkUrl100
-      ? result.artworkUrl100.replace("100x100bb", "600x600bb")
-      : null;
-
-    let tracks = [];
-    if (result.collectionId) {
-      try {
-        const lookupRes = await fetch(
-          `https://itunes.apple.com/lookup?id=${result.collectionId}&entity=song`
-        );
-        const lookupData = await lookupRes.json();
-        tracks = (lookupData.results || [])
-          .filter(r => r.wrapperType === "track" && r.kind === "song")
-          .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
-          .map(r => r.trackName)
-          .filter(Boolean);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    return { cover, tracks };
+    const lookupData = await lookupRes.json();
+    return (lookupData.results || [])
+      .filter(r => r.wrapperType === "track" && r.kind === "song")
+      .sort((a, b) => (a.trackNumber || 0) - (b.trackNumber || 0))
+      .map(r => r.trackName)
+      .filter(Boolean);
   } catch (e) {
     console.error(e);
+    return [];
   }
+}
 
-  return { cover: null, tracks: [] };
+// Runs a plain iTunes album search and returns every plausible candidate
+// (deduped by collection id) so the person can pick the exact release
+// themselves, rather than trusting a single auto-guessed match. Returns:
+//   - an array (possibly empty) of candidates on success
+//   - null if the request itself failed (network/CORS/etc — distinct from
+//     "the request worked but iTunes had nothing")
+async function searchAlbumCandidates(query) {
+  const q = (query || "").trim();
+  if (!q) return [];
+  try {
+    const res = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=25`
+    );
+    const data = await res.json();
+    const seen = new Set();
+    const out = [];
+    for (const r of data.results || []) {
+      if (!r.collectionName || !r.collectionId || seen.has(r.collectionId)) continue;
+      seen.add(r.collectionId);
+      out.push({
+        collectionId: r.collectionId,
+        artist: r.artistName || "",
+        album: r.collectionName,
+        year: r.releaseDate ? new Date(r.releaseDate).getFullYear() : "",
+        cover: r.artworkUrl100 ? r.artworkUrl100.replace("100x100bb", "600x600bb") : null,
+      });
+    }
+    return out;
+  } catch (e) {
+    console.error(e);
+    return null;
+  }
+}
+
+// Best-effort automatic lookup used as a fallback when the person adds an
+// album without using the search picker (e.g. quickly typing details in and
+// hitting Add). Scores every candidate instead of trusting iTunes' result
+// order, since deluxe reissues / compilations often outrank the plain album.
+async function getAlbumInfo(artist, album) {
+  try {
+    const response = await fetch(
+      `/api/album-lookup?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`
+    );
+    const data = await response.json();
+    
+    if (!data.success) return { cover: null, tracks: [] };
+    
+    const tracks = data.tracklist ? data.tracklist.map(t => t.title) : [];
+    return { cover: data.coverArt || null, tracks };
+  } catch (e) {
+    console.error("Album lookup failed:", e);
+    return { cover: null, tracks: [] };
+  }
+}
+
+// ─── ALBUM SEARCH PICKER ─────────────────────────────────────────────────────
+// Shared search UI used both when adding an album and when re-fetching a
+// tracklist later. Lets the person confirm the exact release instead of
+// relying on a silent best-guess match, so cover art and tracklists are
+// accurate on the first try.
+function AlbumSearchPicker({ theme, defaultQuery, onPick, autoRun }) {
+  const [query, setQuery] = useState(defaultQuery || "");
+  const [status, setStatus] = useState("idle"); // idle | loading | error | empty | done
+  const [results, setResults] = useState([]);
+
+  const runSearch = useCallback(async (q) => {
+    const term = (q ?? query).trim();
+    if (!term) return;
+    setStatus("loading");
+    const out = await searchAlbumCandidates(term);
+    if (out === null) { setStatus("error"); setResults([]); return; }
+    if (!out.length) { setStatus("empty"); setResults([]); return; }
+    setStatus("done"); setResults(out);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  useEffect(() => {
+    if (autoRun && defaultQuery) runSearch(defaultQuery);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:"flex", gap:6 }}>
+        <input value={query} onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } }}
+          placeholder="Search artist + album…"
+          style={{ flex:1, background:theme.card, border:`1px solid ${theme.border}`,
+            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:15,
+            outline:"none", boxSizing:"border-box" }}
+        />
+        <button onClick={() => runSearch()} disabled={status === "loading"} style={{
+          padding:"8px 14px", background:theme.accent, border:"none", borderRadius:7,
+          color:"#fff", fontWeight:700, fontSize:13,
+          cursor: status === "loading" ? "default" : "pointer",
+          opacity: status === "loading" ? 0.7 : 1,
+        }}>{status === "loading" ? "…" : "Search"}</button>
+      </div>
+      {status === "error" && (
+        <div style={{ fontSize:12, color:"#f87171", marginTop:8, lineHeight:1.5 }}>
+          Couldn't reach the lookup service. Check your connection and try again, or fill in the details manually below.
+        </div>
+      )}
+      {status === "empty" && (
+        <div style={{ fontSize:12, color:theme.muted, marginTop:8, lineHeight:1.5 }}>
+          No matches found on iTunes for that search. You can still enter the album manually below.
+        </div>
+      )}
+      {results.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, maxHeight:260, overflowY:"auto", paddingRight:2 }}>
+          {results.map(r => (
+            <div key={r.collectionId} onClick={() => onPick(r)} style={{
+              display:"flex", alignItems:"center", gap:10, padding:"7px 9px",
+              background:theme.card, border:`1px solid ${theme.border}`, borderRadius:8, cursor:"pointer",
+            }}>
+              {r.cover
+                ? <img src={r.cover} alt="" style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />
+                : <div style={{ width:38, height:38, borderRadius:6, background:theme.surface, flexShrink:0 }} />}
+              <div style={{ minWidth:0, flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.album}</div>
+                <div style={{ fontSize:12, color:theme.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  {r.artist}{r.year ? ` · ${r.year}` : ""}
+                </div>
+              </div>
+              <span style={{ fontSize:11, color:theme.accent, flexShrink:0, fontWeight:700 }}>Use this ›</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── STATS PAGE ──────────────────────────────────────────────────────────────
@@ -1852,20 +2077,30 @@ useEffect(() => {
 
   const handleAdd = async (form) => {
   if (isDuplicateAlbum(form.artist, form.album)) return;
-  const { cover: fetchedCover, tracks } = await getAlbumInfo(form.artist, form.album);
-  const cover = form.cover?.trim() ? form.cover.trim() : fetchedCover;
+  const { __collectionId, ...formRest } = form;
+  let cover = formRest.cover?.trim() || null;
+  let tracks = [];
+  if (__collectionId) {
+    // Person confirmed an exact release via search — fetch its tracklist
+    // directly instead of re-running the fuzzy match.
+    tracks = await fetchTracksForCollection(__collectionId);
+  } else {
+    const info = await getAlbumInfo(formRest.artist, formRest.album);
+    if (!cover) cover = info.cover;
+    tracks = info.tracks;
+  }
 
   const entry = {
-    ...form,
+    ...formRest,
     id: uid(),
-    year: parseInt(form.year) || new Date().getFullYear(),
+    year: parseInt(formRest.year) || new Date().getFullYear(),
     cover,
   };
 
   setListened(prev => [...prev, { ...entry, rating: null }]);
 
   if (tracks.length) {
-    const cacheKey = `${form.artist}||${form.album}`;
+    const cacheKey = `${formRest.artist}||${formRest.album}`;
     setTrackCache(prev => {
       const next = { ...prev, [cacheKey]: tracks };
       persist(SK.tracks, next);
@@ -1876,7 +2111,8 @@ useEffect(() => {
   setAddModal(null);
 };
 
-  const handleEdit = (form, id) => {
+  const handleEdit = (formIn, id) => {
+    const { __collectionId, ...form } = formIn;
     if (isDuplicateAlbum(form.artist, form.album, id)) return;
     const prevAlbum = listened.find(a => a.id === id);
     const renamed = prevAlbum && (prevAlbum.artist !== form.artist || prevAlbum.album !== form.album);
@@ -2344,8 +2580,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════════ */}
-      {detailAlbum && (<>
-<div>{detailAlbum?.cover && <img src={detailAlbum.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
+      {detailAlbum && (
         <AlbumDetailModal
           album={detailAlbum} onClose={closeDetail}
           trackCache={trackCache} setTrackCache={setTrackCache}
@@ -2354,8 +2589,9 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           onOpenArtist={name => openArtist(name)}
           onSetCriticScore={setCriticScore}
           showDebugTools={settings.showCriticDebug !== false}
+          onUpdateAlbumCover={(id, cover) => setListened(prev => prev.map(a => a.id === id ? { ...a, cover } : a))}
         />
-      </>) }
+      ) }
       {!detailAlbum && detailSong && (<>
         <SongDetailModal
           song={detailSong} onClose={closeDetail}
