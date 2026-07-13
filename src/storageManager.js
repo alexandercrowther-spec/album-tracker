@@ -34,7 +34,6 @@ const DEFAULTS = {
 
 export function persist(k, v) {
   try {
-    // Validate before saving
     const sanitized = sanitizeForStorage(k, v);
     localStorage.setItem(k, JSON.stringify(sanitized));
     return true;
