@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
 import { SEED_LISTENED } from "./seedData";
-import { loadLS, persist, SK, loadWithIntegrityCheck } from "./storageManager";
 // ─── GENRES ───────────────────────────────────────────────────────────────────
 const GENRES = {
   hiphop:           { label: "Hip-Hop", color: "#f87171" },
@@ -180,6 +179,10 @@ const SK = {
   albumOrder: "albumorder-v1", songOrder: "songorder-v1",
   // store set of IDs permanently deleted by the user
   deletedListened: "deleted-listened-v1",
+  // timestamp (ms) of the last LOCAL edit, used to decide whether an
+  // incoming cloud snapshot is actually newer than what's on this device
+  // before overwriting anything with it — see the sync effect below.
+  updatedAt: "data-updated-at-v1",
 };
 const persist = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 const loadLS = (k, fb) => { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : fb; } catch { return fb; } };
@@ -377,105 +380,170 @@ function ReorderArrows({ canUp, canDown, onUp, onDown, theme }) {
   );
 }
 
+// ─── ALBUM SEARCH PICKER ─────────────────────────────────────────────────────
+// Lets the person confirm exactly which release they mean instead of the
+// app silently guessing — this is the fix for "Yeezus becomes Ye" /
+// "Overly Dedicated becomes DAMN. Collector's Edition"-type mismatches.
+// Editions of the same album (Deluxe, Collector's Edition, Remastered, ...)
+// show up as separate, clearly-labeled cards.
+function AlbumSearchPicker({ artist, album, theme, selectedId, onPick }) {
+  const [results, setResults] = useState(null); // null = not searched yet
+  const [loading, setLoading] = useState(false);
+  const [picking, setPicking] = useState(null); // id currently fetching its tracklist
+
+  const doSearch = useCallback(async () => {
+    const a = artist.trim(), al = album.trim();
+    if (!a && !al) { setResults([]); return; }
+    setLoading(true);
+    const candidates = await searchAlbumCandidates(a, al, 8);
+    setResults(candidates);
+    setLoading(false);
+  }, [artist, album]);
+
+  // Auto-search once both fields have something, debounced so it doesn't
+  // fire on every keystroke.
+  useEffect(() => {
+    const a = artist.trim(), al = album.trim();
+    if (!a || !al) { setResults(null); return; }
+    const t = setTimeout(() => { doSearch(); }, 550);
+    return () => clearTimeout(t);
+  }, [artist, album, doSearch]);
+
+  const pick = async (candidate) => {
+    setPicking(candidate.id);
+    const tracks = candidate.source === "musicbrainz"
+      ? await fetchTracklistForMBReleaseGroup(candidate.id)
+      : await fetchTracklistForCollection(candidate.id);
+    setPicking(null);
+    onPick({
+      id: candidate.id,
+      source: candidate.source,
+      cover: candidate.cover,
+      tracks,
+      matchedArtist: candidate.artist,
+      matchedAlbum: candidate.album,
+    });
+  };
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+        <div style={{ fontSize:13, color:theme.muted }}>Find the exact release</div>
+        <button type="button" onClick={doSearch} disabled={loading} style={{
+          background:"none", border:`1px solid ${theme.border}`, borderRadius:6,
+          color:theme.muted, cursor:loading?"default":"pointer", fontSize:11, padding:"3px 9px",
+        }}>{loading ? "Searching…" : "🔍 Search"}</button>
+      </div>
+
+      {loading && (
+        <div style={{ fontSize:12, color:theme.muted, padding:"10px 0" }}>Searching…</div>
+      )}
+
+      {!loading && results && results.length === 0 && (
+        <div style={{ fontSize:12, color:theme.muted, padding:"8px 0" }}>
+          No matches found anywhere we checked — that's fine, it may just not be catalogued digitally.
+          Enter a cover URL below and add the tracklist manually after saving.
+        </div>
+      )}
+
+      {!loading && results && results.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6, maxHeight:260, overflowY:"auto", paddingRight:2 }}>
+          {results.map(c => {
+            const isSelected = selectedId === c.id;
+            const isPicking = picking === c.id;
+            return (
+              <div key={`${c.source}:${c.id}`} onClick={() => !picking && pick(c)} style={{
+                display:"flex", alignItems:"center", gap:10, padding:"7px 9px",
+                background: isSelected ? theme.accent+"1a" : theme.card,
+                border:`1px solid ${isSelected ? theme.accent : theme.border}`,
+                borderRadius:9, cursor: picking ? "default" : "pointer",
+                opacity: picking && !isPicking ? 0.5 : 1,
+              }}>
+                {c.cover
+                  ? <img src={c.cover} alt="" onError={e => { e.currentTarget.style.display = "none"; }}
+                      style={{ width:40, height:40, borderRadius:6, objectFit:"cover", flexShrink:0, background:theme.surface }} />
+                  : <div style={{ width:40, height:40, borderRadius:6, background:theme.surface, flexShrink:0 }} />}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {c.album}
+                  </div>
+                  <div style={{ fontSize:11, color:theme.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                    {c.artist}{c.year ? ` · ${c.year}` : ""}{c.trackCount ? ` · ${c.trackCount} tracks` : ""}
+                  </div>
+                </div>
+                {c.source === "musicbrainz" && (
+                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:theme.surface, color:theme.muted, border:`1px solid ${theme.border}`, flexShrink:0 }}>
+                    MusicBrainz
+                  </div>
+                )}
+                {c.edition && (
+                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:theme.surface, color:theme.muted, border:`1px solid ${theme.border}`, flexShrink:0 }}>
+                    {c.edition}
+                  </div>
+                )}
+                {!c.edition && c.confident && (
+                  <div style={{ fontSize:10, padding:"2px 7px", borderRadius:8, background:"#22c55e18", color:"#22c55e", border:"1px solid #22c55e30", flexShrink:0 }}>
+                    Standard
+                  </div>
+                )}
+                <div style={{ fontSize:16, flexShrink:0, width:16, textAlign:"center" }}>
+                  {isPicking ? "⏳" : isSelected ? "✓" : ""}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ALBUM FORM ──────────────────────────────────────────────────────────────
 function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) {
   const [form, setForm] = useState(initial || { artist:"", album:"", year: new Date().getFullYear(), genre:"hiphop", cover:"" });
   const [saving, setSaving] = useState(false);
   const [dupError, setDupError] = useState(null);
-  const [yearError, setYearError] = useState(null);
-  // Tracks which exact iTunes release (if any) the person confirmed via
-  // search, so the tracklist fetched on save matches precisely what they
-  // saw in the results list instead of re-guessing from scratch.
-  const [confirmedId, setConfirmedId] = useState(initial?.__collectionId || null);
-  const [confirmedLabel, setConfirmedLabel] = useState(null);
-  const [showSearch, setShowSearch] = useState(mode !== "edit");
-
+  // The exact release the person confirmed via search, if any. When set,
+  // this is used as-is (cover + full tracklist) instead of re-guessing.
+  const [matched, setMatched] = useState(null);
   const set = (k, v) => {
     setForm(p => ({...p, [k]: v}));
     setDupError(null);
-    // Any manual edit to artist/album invalidates a previously-confirmed
-    // search match, since it no longer necessarily describes that release.
-    if (k === "artist" || k === "album") { setConfirmedId(null); setConfirmedLabel(null); }
+    if (k === "artist" || k === "album") setMatched(null); // stale once the search terms change
   };
-
-  const handlePick = (r) => {
-    setForm(p => ({
-      ...p,
-      artist: r.artist || p.artist,
-      album: r.album || p.album,
-      year: r.year || p.year,
-      cover: r.cover || p.cover,
-    }));
-    setConfirmedId(r.collectionId);
-    setConfirmedLabel(`${r.album} — ${r.artist}${r.year ? ` (${r.year})` : ""}`);
-    setDupError(null);
-    setShowSearch(false);
-  };
-
   const submit = async () => {
     const artist = form.artist.trim();
     const album = form.album.trim();
     if (!artist || !album) return;
-    const yearNum = parseInt(form.year, 10);
-    if (form.year !== "" && (isNaN(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 1)) {
-      setYearError("Enter a valid year.");
-      return;
-    }
-    setYearError(null);
     if (isDuplicate && isDuplicate(artist, album)) {
       setDupError(`You already have "${album}" by ${artist} saved. Duplicate albums (case-insensitive) aren't allowed.`);
       return;
     }
     setSaving(true);
-    await onSave({ ...form, artist, album, year: form.year === "" ? "" : yearNum, __collectionId: confirmedId });
+    const payload = {
+      ...form, artist, album,
+      cover: form.cover?.trim() || matched?.cover || "",
+    };
+    if (mode !== "edit") {
+      payload.tracks = matched?.tracks || null; // null = let the caller do its own best-effort lookup
+    }
+    await onSave(payload);
   };
-
-  const onFieldKeyDown = e => { if (e.key === "Enter") { e.preventDefault(); submit(); } };
-
   return (
     <Modal onClose={onClose} theme={theme}>
-      <h2 style={{ margin:"0 0 14px", fontSize:16, color:theme.text, fontWeight:700 }}>
+      <h2 style={{ margin:"0 0 18px", fontSize:16, color:theme.text, fontWeight:700 }}>
         {mode === "edit" ? "Edit album" : "Add album"}
       </h2>
-
-      {mode !== "edit" && (
-        <div style={{ marginBottom:14 }}>
-          {showSearch ? (
-            <AlbumSearchPicker theme={theme} defaultQuery="" onPick={handlePick} />
-          ) : (
-            <button onClick={() => setShowSearch(true)} style={{
-              width:"100%", padding:"8px", background:"transparent",
-              border:`1px dashed ${theme.border}`, borderRadius:8,
-              color:theme.muted, cursor:"pointer", fontSize:12, marginBottom:2,
-            }}>🔍 Search iTunes to confirm the exact release</button>
-          )}
-          {confirmedLabel && (
-            <div style={{ fontSize:11, color:theme.accent, marginTop:8, lineHeight:1.5 }}>
-              ✓ Matched to: {confirmedLabel}. Its tracklist and cover will be used automatically.
-            </div>
-          )}
-        </div>
-      )}
-
-      {[["Artist","artist"],["Album title","album"]].map(([label,key]) => (
+      {[["Artist","artist","text"],["Album title","album","text"],["Year","year","number"]].map(([label,key,type]) => (
         <div key={key} style={{ marginBottom:12 }}>
           <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>{label}</div>
-          <input type="text" value={form[key]} onKeyDown={onFieldKeyDown}
-            onChange={e => set(key, e.target.value)}
+          <input type={type} value={form[key]}
+            onChange={e => set(key, type==="number" ? parseInt(e.target.value)||"" : e.target.value)}
             style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
               borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
           />
         </div>
       ))}
-      <div style={{ marginBottom:12 }}>
-        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Year</div>
-        <input type="number" value={form.year} onKeyDown={onFieldKeyDown}
-          onChange={e => { setForm(p => ({...p, year: e.target.value === "" ? "" : parseInt(e.target.value, 10)})); setYearError(null); }}
-          style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16, outline:"none", boxSizing:"border-box" }}
-        />
-        {yearError && <div style={{ fontSize:11, color:"#f87171", marginTop:4 }}>{yearError}</div>}
-      </div>
       <div style={{ marginBottom:12 }}>
         <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Genre</div>
         <select value={form.genre} onChange={e => set("genre", e.target.value)}
@@ -485,12 +553,29 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
         </select>
       </div>
 
+      {mode !== "edit" && (
+        <AlbumSearchPicker
+          artist={form.artist} album={form.album} theme={theme}
+          selectedId={matched?.id}
+          onPick={m => setMatched(m)}
+        />
+      )}
+
+      {matched && (
+        <div style={{
+          display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:11,
+          color:"#22c55e", background:"#22c55e14", border:"1px solid #22c55e30",
+          borderRadius:8, padding:"7px 10px",
+        }}>
+          ✓ Using "{matched.matchedAlbum}" by {matched.matchedArtist} — {matched.tracks.length} track{matched.tracks.length!==1?"s":""} + cover art will be saved.
+        </div>
+      )}
+
       <div style={{ marginBottom:8 }}>
-        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Cover URL {matched ? "(overrides the picked cover)" : "(optional)"}</div>
         <input
           type="text"
           value={form.cover || ""}
-          onKeyDown={onFieldKeyDown}
           onChange={e => set("cover", e.target.value)}
           placeholder="https://..."
           style={{ width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
@@ -498,9 +583,10 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
             outline:"none", boxSizing:"border-box" }}
         />
       </div>
-      {mode !== "edit" && !confirmedLabel && (
+      {mode !== "edit" && !matched && (
         <div style={{ fontSize:11, color:theme.muted, marginBottom:14 }}>
-          If you don't search first, we'll auto-guess the best match and its tracklist once you add the album — you can re-fetch or edit the tracklist later if it's wrong.
+          Didn't pick a release above? We'll try a best-effort automatic lookup, but only if we're confident
+          it's the right album — otherwise it's saved with no cover/tracklist and you can add them by hand.
         </div>
       )}
       {dupError && (
@@ -514,7 +600,7 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
         style={{ width:"100%", padding:"10px", background:theme.accent, border:"none",
           borderRadius:8, color:"#fff", fontWeight:700, fontSize:14, cursor: saving ? "default" : "pointer",
           opacity: saving ? 0.7 : 1 }}>
-        {saving ? "Looking up tracklist…" : (mode === "edit" ? "Save changes" : "Add album")}
+        {saving ? "Saving…" : (mode === "edit" ? "Save changes" : "Add album")}
       </button>
     </Modal>
   );
@@ -575,9 +661,7 @@ function SongDetailModal({ song, songRatings, setSongRatings, theme, onClose, on
   const setRating = val => {
     const num = parseFloat(val);
     const rating = (!isNaN(num) && num >= 0 && num <= 10) ? Math.round(num * 10) / 10 : null;
-    const next = { ...songRatings, [noteKey]: rating };
-    setSongRatings(next);
-    persist(SK.songRatings, next);
+    setSongRatings(prev => ({ ...prev, [noteKey]: rating }));
   };
 
   return (
@@ -775,16 +859,36 @@ function CriticScoreBlock({ album, onSetCriticScore, theme, showDebugTools }) {
   );
 }
 
-function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore, showDebugTools, onUpdateAlbumCover }) {
+function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatings, setSongRatings, theme, onOpenArtist, onSetCriticScore, showDebugTools, onUpdateAlbum }) {
   const cacheKey = `${album.artist}||${album.album}`;
   const tracks = trackCache[cacheKey];
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!tracks);
   const [error, setError] = useState(null);
   const [view, setView] = useState("tracks");
   const [activeSong, setActiveSong] = useState(null);
   const [editTracks, setEditTracks] = useState(null);
   const [etError, setEtError] = useState(null);
-  const [applyMsg, setApplyMsg] = useState(null);
+  const [fixMatch, setFixMatch] = useState(null); // picked candidate awaiting confirmation
+
+  useEffect(() => {
+  if (!tracks) {
+    setTrackCache(prev => ({ ...prev, [cacheKey]: [] }));
+  }
+
+  setLoading(false);
+}, []);
+
+  // "Fix cover & tracklist": replaces this album's cover art and tracklist
+  // with a specific release the person picks — for correcting existing
+  // entries that got matched to the wrong album/edition before this fix,
+  // or for swapping to a different edition later.
+  const applyFix = () => {
+    if (!fixMatch) return;
+    onUpdateAlbum(album.id, { cover: fixMatch.cover || album.cover });
+    setTrackCache(prev => ({ ...prev, [cacheKey]: fixMatch.tracks }));
+    setFixMatch(null);
+    setView("tracks");
+  };
 
   const ratingKey = s => `${cacheKey}||${s}`;
 
@@ -793,9 +897,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
   const setSongRating = (song, val) => {
     const num = parseFloat(val);
     const rating = (!isNaN(num) && num >= 0 && num <= 10) ? Math.round(num * 10) / 10 : null;
-    const next = { ...songRatings, [ratingKey(song)]: rating };
-    setSongRatings(next);
-    persist(SK.songRatings, next);
+    setSongRatings(prev => ({ ...prev, [ratingKey(song)]: rating }));
   };
 
   const openEditTracks = () => {
@@ -836,14 +938,9 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
         ratingsChanged = true;
       }
     });
-    if (ratingsChanged) {
-      setSongRatings(nextRatings);
-      persist(SK.songRatings, nextRatings);
-    }
+    if (ratingsChanged) setSongRatings(nextRatings);
 
-    const next = { ...trackCache, [cacheKey]: list };
-    setTrackCache(next);
-    persist(SK.tracks, next);
+    setTrackCache(prev => ({ ...prev, [cacheKey]: list }));
     setView("tracks");
   };
   const etSet = (id, val) => { setEditTracks(p => p.map(t => t.id === id ? { ...t, val } : t)); setEtError(null); };
@@ -858,47 +955,11 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
     return next;
   });
 
-  const applyPickedRelease = async (r) => {
-    setLoading(true);
-    setError(null);
-    const fetchedTracks = await fetchTracksForCollection(r.collectionId);
-    if (!fetchedTracks.length) {
-      setError("That release didn't return any tracks — try a different result, or add tracks manually.");
-      setLoading(false);
-      return;
-    }
-    const next = { ...trackCache, [cacheKey]: fetchedTracks };
-    setTrackCache(next);
-    persist(SK.tracks, next);
-    if (r.cover && onUpdateAlbumCover) onUpdateAlbumCover(album.id, r.cover);
-    setApplyMsg(`Tracklist updated from "${r.album}" (${fetchedTracks.length} tracks).`);
-    setLoading(false);
-    setView("tracks");
-  };
-
   const c = GENRES[album.genre]?.color || "#888";
-  const currentTracks = tracks; // undefined = never fetched/found; [] explicit-empty only after a real lookup returned nothing
-  const hasTracklist = Array.isArray(currentTracks) && currentTracks.length > 0;
+  const currentTracks = trackCache[cacheKey];
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
-      {view === "search" && (
-        <>
-          <button onClick={() => { setView("tracks"); setError(null); }} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 10px", display:"flex", alignItems:"center", gap:4 }}>
-            ← back
-          </button>
-          <h3 style={{ margin:"0 0 2px", color:theme.text, fontSize:15 }}>Find the correct release</h3>
-          <p style={{ margin:"0 0 12px", fontSize:13, color:theme.muted }}>
-            Pick the exact release on iTunes — its tracklist (and cover) will replace what's saved now.
-          </p>
-          {loading && <div style={{ color:theme.muted, fontSize:13, marginBottom:10 }}>Applying tracklist…</div>}
-          {error && (
-            <div style={{ color:"#f87171", fontSize:12, marginBottom:10, background:"#f8717118", border:"1px solid #f8717133", borderRadius:8, padding:"9px 11px", lineHeight:1.5 }}>{error}</div>
-          )}
-          <AlbumSearchPicker theme={theme} defaultQuery={`${album.artist} ${album.album}`} autoRun onPick={applyPickedRelease} />
-        </>
-      )}
-
       {view === "edit" && editTracks && (
         <>
           <button onClick={() => setView("tracks")} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 10px", display:"flex", alignItems:"center", gap:4 }}>
@@ -965,6 +1026,38 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
         </>
       )}
 
+      {view === "fix" && (
+        <>
+          <button onClick={() => { setFixMatch(null); setView("tracks"); }} style={{ background:"none", border:"none", color:theme.muted, cursor:"pointer", fontSize:13, padding:"0 0 10px", display:"flex", alignItems:"center", gap:4 }}>
+            ← back without changing
+          </button>
+          <h3 style={{ margin:"0 0 2px", color:theme.text, fontSize:15 }}>Fix cover & tracklist</h3>
+          <p style={{ margin:"0 0 12px", fontSize:12, color:theme.muted }}>
+            Search for the release this album should actually be linked to, then pick it. This replaces the current
+            cover art and tracklist — any existing song ratings stay attached by title.
+          </p>
+          <AlbumSearchPicker
+            artist={album.artist} album={album.album} theme={theme}
+            selectedId={fixMatch?.id}
+            onPick={m => setFixMatch({ ...m, cover: m.cover, tracks: m.tracks })}
+          />
+          {fixMatch && (
+            <div style={{
+              display:"flex", alignItems:"center", gap:8, marginBottom:12, fontSize:11,
+              color:"#22c55e", background:"#22c55e14", border:"1px solid #22c55e30",
+              borderRadius:8, padding:"7px 10px",
+            }}>
+              ✓ "{fixMatch.matchedAlbum}" by {fixMatch.matchedArtist} — {fixMatch.tracks.length} track{fixMatch.tracks.length!==1?"s":""}
+            </div>
+          )}
+          <button onClick={applyFix} disabled={!fixMatch} style={{
+            width:"100%", padding:"9px", background:theme.accent,
+            border:"none", borderRadius:8, color:"#fff", fontWeight:700, fontSize:13,
+            cursor: fixMatch ? "pointer" : "default", opacity: fixMatch ? 1 : 0.5,
+          }}>Apply this release</button>
+        </>
+      )}
+
       {view === "tracks" && (
         <>
           <div style={{ fontSize:11, color:c, fontWeight:700, marginBottom:4 }}>{GENRES[album.genre]?.label}</div>
@@ -977,20 +1070,19 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
           </div>
           {album.cover && <div style={{textAlign:"center",marginBottom:14}}><img src={album.cover} alt={album.album} style={{width:220,maxWidth:"100%",borderRadius:12}} /></div>}
           <CriticScoreBlock album={album} onSetCriticScore={onSetCriticScore} theme={theme} showDebugTools={showDebugTools} />
-          {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Updating tracklist…</div>}
+          {loading && <div style={{ color:theme.muted, fontSize:13, textAlign:"center", padding:"24px 0" }}>Loading tracklist…</div>}
           {error   && <div style={{ color:"#f87171", fontSize:12, marginBottom:10 }}>{error}</div>}
-          {applyMsg && <div style={{ color:theme.accent, fontSize:12, marginBottom:10 }}>{applyMsg}</div>}
-          <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginBottom:8 }}>
-            <button onClick={() => { setError(null); setApplyMsg(null); setView("search"); }} style={{
+          <div style={{ display:"flex", justifyContent:"flex-end", gap:6, marginBottom:8 }}>
+            <button onClick={() => setView("fix")} style={{
               padding:"4px 10px", background:theme.card, border:`1px solid ${theme.border}`,
               borderRadius:6, color:theme.muted, cursor:"pointer", fontSize:11,
-            }}>🔍 Find correct release</button>
+            }}>🔁 Fix cover/tracklist</button>
             <button onClick={openEditTracks} style={{
               padding:"4px 10px", background:theme.card, border:`1px solid ${theme.border}`,
               borderRadius:6, color:theme.muted, cursor:"pointer", fontSize:11,
             }}>✏️ Edit tracklist</button>
           </div>
-          {hasTracklist && (
+          {currentTracks && (
             <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
               {currentTracks.map((song, i) => {
                 const sr = songRatings[ratingKey(song)];
@@ -1014,24 +1106,12 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
               })}
             </div>
           )}
-          {!hasTracklist && !loading && (
-            <div style={{ textAlign:"center", padding:"20px 0 4px" }}>
-              <div style={{ fontSize:13, color:theme.muted, marginBottom:12 }}>
-                No tracklist yet for this album.
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                <button onClick={() => { setError(null); setApplyMsg(null); setView("search"); }} style={{
-                  width:"100%", padding:"10px", background:theme.card,
-                  border:`1px dashed ${theme.border}`, borderRadius:8,
-                  color:theme.text, cursor:"pointer", fontSize:13, fontWeight:600,
-                }}>🔍 Search iTunes for the tracklist</button>
-                <button onClick={openEditTracks} style={{
-                  width:"100%", padding:"10px", background:"transparent",
-                  border:`1px dashed ${theme.border}`, borderRadius:8,
-                  color:theme.muted, cursor:"pointer", fontSize:13,
-                }}>+ Add tracks manually</button>
-              </div>
-            </div>
+          {!currentTracks && !loading && (
+            <button onClick={openEditTracks} style={{
+              width:"100%", padding:"10px", background:theme.card,
+              border:`1px dashed ${theme.border}`, borderRadius:8,
+              color:theme.muted, cursor:"pointer", fontSize:13,
+            }}>+ Add tracks manually</button>
           )}
         </>
       )}
@@ -1381,23 +1461,67 @@ function ConfirmModal({ message, subMessage, onConfirm, onClose, theme, dangerou
   );
 }
 
-// Strip accents, "(Deluxe Edition)"/"[Remastered]"-style suffixes, and
-// punctuation so titles compare on their actual words rather than exact
-// formatting, which iTunes is inconsistent about.
+// Strip accents and punctuation so titles compare on their actual words
+// rather than exact formatting, which iTunes is inconsistent about. Unlike
+// the old version, this does NOT delete parenthesized/bracketed text — an
+// edition suffix like "(Collector's Edition)" is meaningful information we
+// want to reason about explicitly (see splitEdition), not throw away.
 function normalizeTitle(s) {
   return (s || "")
     .toLowerCase()
     .normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/\(.*?\)|\[.*?\]/g, "")
     .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
-// 0-1 similarity score between two already-normalized strings.
+// Single tokens that mark the start of an "edition" descriptor tacked onto
+// an otherwise-plain album title, e.g. "damn collectors edition" or
+// "abbey road super deluxe anniversary edition". Everything from the first
+// matching token onward is treated as edition text, not part of the title.
+const EDITION_MARKERS = new Set([
+  "deluxe", "remaster", "remastered", "anniversary", "expanded", "extended",
+  "reissue", "reissued", "edition", "version", "collector", "collectors",
+  "platinum", "super", "bonus", "international", "explicit", "clean",
+  "special", "complete", "legacy", "instrumental", "acapella", "acappella",
+  "live", "demo", "demos", "mono", "stereo", "digital",
+]);
+
+// Splits a normalized title into { base, edition }. "yeezus" -> base
+// "yeezus", edition "". "damn collectors edition" -> base "damn",
+// edition "collectors edition". "ye" -> base "ye", edition "".
+function splitEdition(normalized) {
+  const words = (normalized || "").split(" ").filter(Boolean);
+  const idx = words.findIndex(w => EDITION_MARKERS.has(w));
+  if (idx === -1) return { base: normalized, edition: "" };
+  return { base: words.slice(0, idx).join(" ").trim(), edition: words.slice(idx).join(" ").trim() };
+}
+
+// Human-readable edition label for UI badges, derived the same way.
+// Returns null for a plain/standard release.
+function detectEdition(title) {
+  const { edition } = splitEdition(normalizeTitle(title));
+  if (!edition) return null;
+  return edition
+    .split(" ")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ")
+    .replace(/\bCollectors\b/, "Collector's");
+}
+
+// 0-1 similarity between two already-normalized strings. Used for ARTIST
+// name comparison, where a loose "one contains the other" match is usually
+// still correct (e.g. "kanye west" vs "ye", or "the beatles" vs "beatles").
+// The length-ratio guard is what stops a tiny fragment like "ye" from
+// getting undeserved credit for merely appearing inside a longer, unrelated
+// string — that was the root cause of "Yeezus" search results being
+// out-scored by "Ye".
 function titleSimilarity(a, b) {
   if (!a || !b) return 0;
   if (a === b) return 1;
-  if (a.includes(b) || b.includes(a)) return 0.75;
+  const shorter = a.length <= b.length ? a : b;
+  const longer  = a.length <= b.length ? b : a;
+  if (shorter && longer.includes(shorter) && shorter.length >= longer.length * 0.6) return 0.8;
   const aTokens = new Set(a.split(" ").filter(Boolean));
   const bTokens = new Set(b.split(" ").filter(Boolean));
   if (!aTokens.size || !bTokens.size) return 0;
@@ -1406,32 +1530,74 @@ function titleSimilarity(a, b) {
   return overlap / Math.max(aTokens.size, bTokens.size);
 }
 
+// 0-1 confidence that `candidateTitle` IS the album the person asked for
+// (`targetTitle`), edition-aware. This is deliberately strict: two totally
+// different albums by the same artist ("Overly Dedicated" vs "DAMN.") must
+// never score high just because they share an artist or a stray word —
+// unlike the old titleSimilarity substring shortcut, plain token overlap
+// alone is capped well below what an exact/edition-variant base-title match
+// scores, so it can never win outright.
+function albumMatchScore(candidateTitle, targetTitle) {
+  const cn = normalizeTitle(candidateTitle);
+  const tn = normalizeTitle(targetTitle);
+  if (!cn || !tn) return 0;
+  if (cn === tn) return 1;
+  const { base: cBase, edition: cEdition } = splitEdition(cn);
+  const { base: tBase, edition: tEdition } = splitEdition(tn);
+  if (cBase && cBase === tBase) {
+    // Same underlying album. Prefer an exact edition match (both plain, or
+    // both naming the same edition); still count a *different* edition of
+    // the right album as a strong match, just not a perfect one, so e.g.
+    // asking for "DAMN." doesn't accidentally settle for the Collector's
+    // Edition when the plain one is also on offer.
+    return cEdition === tEdition ? 0.97 : 0.85;
+  }
+  const cTokens = new Set(cBase.split(" ").filter(Boolean));
+  const tTokens = new Set(tBase.split(" ").filter(Boolean));
+  if (!cTokens.size || !tTokens.size) return 0;
+  let overlap = 0;
+  cTokens.forEach(w => { if (tTokens.has(w)) overlap++; });
+  // Scaled down hard: token overlap on its own is a weak signal (lots of
+  // albums share a word) and must never outscore a real base-title match.
+  return (overlap / Math.max(cTokens.size, tTokens.size)) * 0.5;
+}
+
+// Minimum album-title confidence required before we'll silently attach a
+// cover + tracklist to something the person didn't explicitly pick. Below
+// this, an "almost right" guess is worse than no guess — it looks correct
+// at a glance and quietly corrupts the tracklist/rating data underneath it.
+const AUTO_MATCH_THRESHOLD = 0.55;
+
 // iTunes' search ranking often isn't an exact-title match — for artists
 // with many releases it'll happily return a deluxe reissue, a "best of"
 // compilation, or occasionally a different artist entirely as result #1.
-// Score every candidate against the artist/album we actually asked for
-// and take the best match instead of trusting position 0.
+// Score every candidate against the artist/album we actually asked for and
+// take the best match instead of trusting position 0 — and return nothing
+// at all if even the best candidate isn't a confident match.
 function pickBestAlbumMatch(results, artist, album) {
   const targetArtist = normalizeTitle(artist);
-  const targetAlbum = normalizeTitle(album);
-  let best = null, bestScore = -1;
+  let best = null, bestScore = -1, bestAlbumScore = 0;
   for (const r of results) {
     if (!r.collectionName) continue;
     const artistScore = titleSimilarity(normalizeTitle(r.artistName), targetArtist);
-    const albumScore = titleSimilarity(normalizeTitle(r.collectionName), targetAlbum);
-    // Require some minimum artist relevance so a same-titled album by a
-    // different artist can't outscore the real one on title match alone.
-    if (artistScore < 0.4) continue;
-    const score = albumScore * 2 + artistScore;
-    if (score > bestScore) { bestScore = score; best = r; }
+    const albumScore = albumMatchScore(r.collectionName, album);
+    // Normally require some minimum artist relevance so a same-titled
+    // album by a different artist can't outscore the real one on title
+    // match alone — but a very strong, near-exact album-title match is
+    // allowed through on its own, since collabs/features/group monikers
+    // (e.g. "Drake & 21 Savage", "JACKBOYS") often don't textually
+    // resemble the artist name the person typed at all.
+    if (artistScore < 0.4 && albumScore < 0.8) continue;
+    const score = albumScore * 2 + artistScore * 0.3;
+    if (score > bestScore) { bestScore = score; best = r; bestAlbumScore = albumScore; }
   }
-  return best || results[0] || null;
+  if (!best || bestAlbumScore < AUTO_MATCH_THRESHOLD) return null;
+  return best;
 }
 
-// Fetches the tracklist for a *specific, known* iTunes collection id — no
-// fuzzy matching involved, since the caller already knows exactly which
-// release they want (either from a search pick or a previous auto-match).
-async function fetchTracksForCollection(collectionId) {
+// Fetches the ordered tracklist for a specific iTunes collection id.
+async function fetchTracklistForCollection(collectionId) {
+  if (!collectionId) return [];
   try {
     const lookupRes = await fetch(
       `https://itunes.apple.com/lookup?id=${collectionId}&entity=song`
@@ -1448,137 +1614,208 @@ async function fetchTracksForCollection(collectionId) {
   }
 }
 
-// Runs a plain iTunes album search and returns every plausible candidate
-// (deduped by collection id) so the person can pick the exact release
-// themselves, rather than trusting a single auto-guessed match. Returns:
-//   - an array (possibly empty) of candidates on success
-//   - null if the request itself failed (network/CORS/etc — distinct from
-//     "the request worked but iTunes had nothing")
-async function searchAlbumCandidates(query) {
-  const q = (query || "").trim();
-  if (!q) return [];
+// Raw iTunes album search for one query string, filtered down to usable
+// results. Kept separate so both the picker and the silent auto-lookup can
+// combine a "combined term" pass with a "title only" fallback pass without
+// duplicating the fetch/parse logic.
+async function rawAlbumSearch(term, limit = 50) {
   try {
-    const res = await fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=album&limit=25`
-    );
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=${limit}`);
     const data = await res.json();
-    const seen = new Set();
-    const out = [];
-    for (const r of data.results || []) {
-      if (!r.collectionName || !r.collectionId || seen.has(r.collectionId)) continue;
-      seen.add(r.collectionId);
-      out.push({
-        collectionId: r.collectionId,
-        artist: r.artistName || "",
-        album: r.collectionName,
-        year: r.releaseDate ? new Date(r.releaseDate).getFullYear() : "",
-        cover: r.artworkUrl100 ? r.artworkUrl100.replace("100x100bb", "600x600bb") : null,
-      });
-    }
-    return out;
+    return (data.results || []).filter(r => r.collectionName && r.collectionId);
   } catch (e) {
     console.error(e);
-    return null;
+    return [];
   }
 }
 
-// Best-effort automatic lookup used as a fallback when the person adds an
-// album without using the search picker (e.g. quickly typing details in and
-// hitting Add). Scores every candidate instead of trusting iTunes' result
-// order, since deluxe reissues / compilations often outrank the plain album.
+// ─── MUSICBRAINZ FALLBACK ─────────────────────────────────────────────────
+// The iTunes Search API is really the old *purchasable iTunes Store*
+// catalog, not the full Apple Music streaming catalog — plenty of real
+// releases (older mixtapes especially, e.g. things that were only ever a
+// free/retail digital drop rather than a store album, or got delisted as
+// purchases while staying on streaming) simply aren't in it, no matter how
+// the query is phrased. MusicBrainz is a separate, independent, free
+// database that isn't tied to any single storefront's catalog and covers
+// this kind of release far better, with Cover Art Archive providing art
+// for anything MusicBrainz has. Used as a fallback whenever iTunes doesn't
+// turn up a confident match, and merged in alongside iTunes results in the
+// picker so the person can still choose between them.
+async function searchMusicBrainzCandidates(artist, album) {
+  try {
+    const q = encodeURIComponent(`${artist} ${album}`.trim());
+    const res = await fetch(`https://musicbrainz.org/ws/2/release-group/?query=${q}&fmt=json&limit=15`);
+    const data = await res.json();
+    return (data["release-groups"] || [])
+      .filter(rg => rg.title && rg.id)
+      .map(rg => ({
+        id: rg.id,
+        title: rg.title,
+        artist: (rg["artist-credit"] || []).map(c => c.name).join(""),
+        year: rg["first-release-date"] ? parseInt(rg["first-release-date"].slice(0, 4)) || null : null,
+      }));
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+// Picks a representative release under a MusicBrainz release-group and
+// returns its ordered tracklist. Release-groups can have several releases
+// (regional pressings, remasters, a Spotify-ingest duplicate, etc); we
+// prefer one flagged "Official" and otherwise just take the first.
+async function fetchTracklistForMBReleaseGroup(rgId) {
+  try {
+    const rgRes = await fetch(`https://musicbrainz.org/ws/2/release-group/${rgId}?inc=releases&fmt=json`);
+    const rgData = await rgRes.json();
+    const releases = rgData.releases || [];
+    if (!releases.length) return [];
+    const release = releases.find(r => r.status === "Official") || releases[0];
+    const relRes = await fetch(`https://musicbrainz.org/ws/2/release/${release.id}?inc=recordings&fmt=json`);
+    const relData = await relRes.json();
+    const tracks = [];
+    (relData.media || []).forEach(m => (m.tracks || []).forEach(t => { if (t.title) tracks.push(t.title); }));
+    return tracks;
+  } catch (e) {
+    console.error(e);
+    return [];
+  }
+}
+
+// Runs both a "artist + album" search and, when that doesn't turn up a
+// confident match, a fallback "album title only" search. This matters for
+// collab/feature albums and group monikers where iTunes credits the
+// release to something that doesn't textually resemble the artist name the
+// person typed (e.g. "Drake & 21 Savage", "JACKBOYS", "Watch The Throne"
+// credited to a joint act) — searching with the artist name baked into the
+// query string can otherwise push the real album out of iTunes' own top
+// results before our local scoring even sees it.
+async function searchAlbumRaw(artist, album) {
+  const combined = await rawAlbumSearch(`${artist} ${album}`.trim());
+  const bestSoFar = combined.reduce((best, r) => {
+    const albumScore = album ? albumMatchScore(r.collectionName, album) : 0;
+    return Math.max(best, albumScore);
+  }, 0);
+  if (bestSoFar >= 0.6 || !album) return combined;
+
+  const titleOnly = await rawAlbumSearch(album);
+  const seen = new Set(combined.map(r => r.collectionId));
+  const merged = [...combined];
+  titleOnly.forEach(r => { if (!seen.has(r.collectionId)) { merged.push(r); seen.add(r.collectionId); } });
+  return merged;
+}
+
+// Returns up to `limit` album candidates for artist+album, sorted by match
+// confidence (best first), each annotated with an edition label, a
+// confidence flag, and a `source` so the UI can show the person exactly
+// what they're picking between instead of a single silent guess. Pulls
+// from iTunes first; if nothing there is confident, MusicBrainz candidates
+// are merged in too (covers mixtapes/older releases that have fallen out
+// of the legacy iTunes Store index — see searchMusicBrainzCandidates).
+// Artist-name relevance is used for ranking, not as a hard cutoff — a very
+// strong album-title match is enough to surface a candidate even if the
+// credited artist string looks nothing like what was typed (collabs,
+// features, group monikers), since the person confirms the pick visually
+// either way.
+async function searchAlbumCandidates(artist, album, limit = 8) {
+  const targetArtist = normalizeTitle(artist);
+  const results = await searchAlbumRaw(artist, album);
+  const seen = new Set();
+  const scoredItunes = results
+    .map(r => {
+      const artistScore = titleSimilarity(normalizeTitle(r.artistName), targetArtist);
+      const albumScore = album ? albumMatchScore(r.collectionName, album) : 0.5;
+      return { r, artistScore, albumScore, score: albumScore * 2 + artistScore * 0.3 };
+    })
+    .filter(x => x.artistScore >= 0.15 || x.albumScore >= 0.5);
+
+  const bestItunesAlbumScore = scoredItunes.reduce((m, x) => Math.max(m, x.albumScore), 0);
+
+  let mbCandidates = [];
+  if (bestItunesAlbumScore < AUTO_MATCH_THRESHOLD && album) {
+    const mbResults = await searchMusicBrainzCandidates(artist, album);
+    mbCandidates = mbResults
+      .map(r => {
+        const artistScore = titleSimilarity(normalizeTitle(r.artist), targetArtist);
+        const albumScore = albumMatchScore(r.title, album);
+        return { r, artistScore, albumScore, score: albumScore * 2 + artistScore * 0.3 };
+      })
+      .filter(x => x.artistScore >= 0.15 || x.albumScore >= 0.5);
+  }
+
+  const combined = [
+    ...scoredItunes.map(x => ({
+      source: "itunes",
+      id: x.r.collectionId,
+      artist: x.r.artistName,
+      album: x.r.collectionName,
+      year: x.r.releaseDate ? new Date(x.r.releaseDate).getFullYear() : null,
+      trackCount: x.r.trackCount || null,
+      cover: x.r.artworkUrl100 ? x.r.artworkUrl100.replace("100x100bb", "600x600bb") : null,
+      edition: detectEdition(x.r.collectionName),
+      albumScore: x.albumScore,
+      score: x.score,
+    })),
+    ...mbCandidates.map(x => ({
+      source: "musicbrainz",
+      id: x.r.id,
+      artist: x.r.artist,
+      album: x.r.title,
+      year: x.r.year,
+      trackCount: null,
+      cover: `https://coverartarchive.org/release-group/${x.r.id}/front-500`,
+      edition: detectEdition(x.r.title),
+      albumScore: x.albumScore,
+      score: x.score,
+    })),
+  ];
+
+  return combined
+    .sort((a, b) => b.score - a.score)
+    .filter(x => {
+      const key = `${x.source}:${x.id}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit)
+    .map(x => ({ ...x, confident: x.albumScore >= AUTO_MATCH_THRESHOLD }));
+}
+
+// Best-effort automatic lookup, used as a fallback when the person adds an
+// album without picking a specific search result. Now gated by
+// AUTO_MATCH_THRESHOLD, so a bad guess is skipped entirely (empty
+// cover/tracks) rather than silently attached — and, like the picker,
+// falls back to MusicBrainz when iTunes doesn't have a confident match.
 async function getAlbumInfo(artist, album) {
   try {
-    const response = await fetch(
-      `/api/album-lookup?artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}`
-    );
-    const data = await response.json();
-    
-    if (!data.success) return { cover: null, tracks: [] };
-    
-    const tracks = data.tracklist ? data.tracklist.map(t => t.title) : [];
-    return { cover: data.coverArt || null, tracks };
+    const results = await searchAlbumRaw(artist, album);
+    const result = results.length ? pickBestAlbumMatch(results, artist, album) : null;
+    if (result) {
+      const cover = result.artworkUrl100 ? result.artworkUrl100.replace("100x100bb", "600x600bb") : null;
+      const tracks = await fetchTracklistForCollection(result.collectionId);
+      return { cover, tracks };
+    }
+
+    const mbResults = await searchMusicBrainzCandidates(artist, album);
+    const targetArtist = normalizeTitle(artist);
+    let bestMB = null, bestMBAlbumScore = 0;
+    mbResults.forEach(r => {
+      const artistScore = titleSimilarity(normalizeTitle(r.artist), targetArtist);
+      const albumScore = albumMatchScore(r.title, album);
+      if ((artistScore >= 0.4 || albumScore >= 0.8) && albumScore > bestMBAlbumScore) {
+        bestMB = r; bestMBAlbumScore = albumScore;
+      }
+    });
+    if (bestMB && bestMBAlbumScore >= AUTO_MATCH_THRESHOLD) {
+      const tracks = await fetchTracklistForMBReleaseGroup(bestMB.id);
+      return { cover: `https://coverartarchive.org/release-group/${bestMB.id}/front-500`, tracks };
+    }
   } catch (e) {
-    console.error("Album lookup failed:", e);
-    return { cover: null, tracks: [] };
+    console.error(e);
   }
-}
 
-// ─── ALBUM SEARCH PICKER ─────────────────────────────────────────────────────
-// Shared search UI used both when adding an album and when re-fetching a
-// tracklist later. Lets the person confirm the exact release instead of
-// relying on a silent best-guess match, so cover art and tracklists are
-// accurate on the first try.
-function AlbumSearchPicker({ theme, defaultQuery, onPick, autoRun }) {
-  const [query, setQuery] = useState(defaultQuery || "");
-  const [status, setStatus] = useState("idle"); // idle | loading | error | empty | done
-  const [results, setResults] = useState([]);
-
-  const runSearch = useCallback(async (q) => {
-    const term = (q ?? query).trim();
-    if (!term) return;
-    setStatus("loading");
-    const out = await searchAlbumCandidates(term);
-    if (out === null) { setStatus("error"); setResults([]); return; }
-    if (!out.length) { setStatus("empty"); setResults([]); return; }
-    setStatus("done"); setResults(out);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  useEffect(() => {
-    if (autoRun && defaultQuery) runSearch(defaultQuery);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div style={{ marginBottom:14 }}>
-      <div style={{ display:"flex", gap:6 }}>
-        <input value={query} onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } }}
-          placeholder="Search artist + album…"
-          style={{ flex:1, background:theme.card, border:`1px solid ${theme.border}`,
-            borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:15,
-            outline:"none", boxSizing:"border-box" }}
-        />
-        <button onClick={() => runSearch()} disabled={status === "loading"} style={{
-          padding:"8px 14px", background:theme.accent, border:"none", borderRadius:7,
-          color:"#fff", fontWeight:700, fontSize:13,
-          cursor: status === "loading" ? "default" : "pointer",
-          opacity: status === "loading" ? 0.7 : 1,
-        }}>{status === "loading" ? "…" : "Search"}</button>
-      </div>
-      {status === "error" && (
-        <div style={{ fontSize:12, color:"#f87171", marginTop:8, lineHeight:1.5 }}>
-          Couldn't reach the lookup service. Check your connection and try again, or fill in the details manually below.
-        </div>
-      )}
-      {status === "empty" && (
-        <div style={{ fontSize:12, color:theme.muted, marginTop:8, lineHeight:1.5 }}>
-          No matches found on iTunes for that search. You can still enter the album manually below.
-        </div>
-      )}
-      {results.length > 0 && (
-        <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:10, maxHeight:260, overflowY:"auto", paddingRight:2 }}>
-          {results.map(r => (
-            <div key={r.collectionId} onClick={() => onPick(r)} style={{
-              display:"flex", alignItems:"center", gap:10, padding:"7px 9px",
-              background:theme.card, border:`1px solid ${theme.border}`, borderRadius:8, cursor:"pointer",
-            }}>
-              {r.cover
-                ? <img src={r.cover} alt="" style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0 }} />
-                : <div style={{ width:38, height:38, borderRadius:6, background:theme.surface, flexShrink:0 }} />}
-              <div style={{ minWidth:0, flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:theme.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.album}</div>
-                <div style={{ fontSize:12, color:theme.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                  {r.artist}{r.year ? ` · ${r.year}` : ""}
-                </div>
-              </div>
-              <span style={{ fontSize:11, color:theme.accent, flexShrink:0, fontWeight:700 }}>Use this ›</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return { cover: null, tracks: [] };
 }
 
 // ─── STATS PAGE ──────────────────────────────────────────────────────────────
@@ -1955,88 +2192,196 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
       })()
     : null;
 
+  // All app data is persisted locally the moment it changes — this used to
+  // be scattered across individual click handlers (easy to miss a spot);
+  // now it's centralized here so nothing can fall through the cracks.
   useEffect(() => { persist(SK.listened, listened); }, [listened]);
+  useEffect(() => { persist(SK.tracks, trackCache); }, [trackCache]);
+  useEffect(() => { persist(SK.songRatings, songRatings); }, [songRatings]);
   useEffect(() => { persist(SK.albumOrder, albumOrder); }, [albumOrder]);
   useEffect(() => { persist(SK.songOrder, songOrder); }, [songOrder]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
 
-  // Guards the very first render(s): the initial `listened` state is
-  // whatever's in localStorage/seed data, loaded synchronously before the
-  // cloud fetch below has a chance to finish. Without this flag, the
-  // save-effect a few lines down could fire on that stale local snapshot
-  // and overwrite the real cloud data with it — this is the single biggest
-  // data-loss risk in the sync setup, so we simply never save to the cloud
-  // until we know what's actually there.
+  // ── LOCAL EDIT TIMESTAMP ─────────────────────────────────────────────
+  // Records when the data on THIS device last actually changed. The cloud
+  // sync below uses this to tell "the cloud has something newer than us"
+  // apart from "the cloud is behind us" instead of always trusting
+  // whatever's in the cloud — that unconditional trust was the main cause
+  // of tracklists/ratings disappearing after a reload: if the 2s debounced
+  // save hadn't finished yet (tab closed, phone locked, network hiccup),
+  // the next load would pull the older cloud copy and stomp the newer
+  // local one, then immediately re-persist that stale copy over the local
+  // backup too — permanently losing the recent edit on both sides at once.
+  const [localUpdatedAt, setLocalUpdatedAt] = useState(() => loadLS(SK.updatedAt, 0));
+  const localUpdatedAtRef = useRef(localUpdatedAt);
+  localUpdatedAtRef.current = localUpdatedAt;
+  // Set right before a batch of setState calls that represent data ARRIVING
+  // (from the cloud or a backup import) rather than the person editing
+  // something, so that arrival doesn't get mistaken for a brand-new local
+  // edit on the very next timestamp check.
+  const suppressTimestampBump = useRef(false);
+  const isFirstDataEffect = useRef(true);
+
+  useEffect(() => {
+    if (isFirstDataEffect.current) { isFirstDataEffect.current = false; return; }
+    if (suppressTimestampBump.current) { suppressTimestampBump.current = false; return; }
+    const now = Date.now();
+    setLocalUpdatedAt(now);
+    persist(SK.updatedAt, now);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listened, trackCache, songRatings, albumOrder, songOrder, deletedListened]);
+
+  // Guards the very first render(s): the initial state is whatever's in
+  // localStorage/seed data, loaded synchronously before the cloud fetch
+  // below has a chance to finish.
   const [cloudLoaded, setCloudLoaded] = useState(false);
 
-useEffect(() => {
-  async function autoLoad() {
-    try {
-      const { data, error } = await supabase
-        .from("app_data")
-        .select("data")
-        .eq("id", 8)
-        .single();
+  // Merges two key→value maps (trackCache or songRatings) WITHOUT ever
+  // silently dropping an entry: every key from `base` survives unless
+  // `winner` also has that exact key, in which case winner's value wins.
+  // This is what stops a stale/partial cloud snapshot (or a stale/partial
+  // local one) from erasing tracklists or ratings that only exist on one
+  // side — a plain overwrite could lose them; this can only ever add.
+  const mergeKeyed = (base, winner) => ({ ...(base || {}), ...(winner || {}) });
 
-      if (error) {
-        console.error(error);
-        return;
-      }
+  // Same idea for the `listened` array, merged by album id.
+  const mergeListened = (base, winner) => {
+    const byId = new Map((base || []).map(a => [a.id, a]));
+    (winner || []).forEach(a => byId.set(a.id, a));
+    return Array.from(byId.values());
+  };
 
-      const cloud = data.data;
-      // Guard against a null/empty row wiping out perfectly good local
-      // data — only apply cloud state for fields that actually came back.
-      if (cloud && typeof cloud === "object") {
-        if (Array.isArray(cloud.listened)) setListened(cloud.listened);
-        if (cloud.trackCache) setTrackCache(cloud.trackCache);
-        if (cloud.songRatings) setSongRatings(cloud.songRatings);
-        if (cloud.settings) setSettings(cloud.settings);
-        if (Array.isArray(cloud.albumOrder)) setAlbumOrder(cloud.albumOrder);
-        if (Array.isArray(cloud.songOrder)) setSongOrder(cloud.songOrder);
-        if (Array.isArray(cloud.deletedListened)) setDeletedListened(cloud.deletedListened);
+  useEffect(() => {
+    async function autoLoad() {
+      try {
+        const { data, error } = await supabase
+          .from("app_data")
+          .select("data")
+          .eq("id", 8)
+          .single();
+
+        if (error) {
+          console.error(error);
+          return;
+        }
+
+        const cloud = data.data;
+        if (!cloud || typeof cloud !== "object") return;
+
+        const cloudUpdatedAt = typeof cloud.updatedAt === "number" ? cloud.updatedAt : 0;
+        const localAt = localUpdatedAtRef.current || 0;
+        // Whichever side is more recent wins ties on conflicting fields,
+        // but everything is MERGED rather than replaced outright, so a
+        // stale write on either side can never make data disappear —
+        // at worst it loses a tie-break on the handful of fields that
+        // actually conflict, never the fields that don't.
+        const cloudWins = cloudUpdatedAt > localAt;
+
+        const deletedUnion = Array.from(new Set([
+          ...(deletedListened || []),
+          ...(Array.isArray(cloud.deletedListened) ? cloud.deletedListened : []),
+        ]));
+
+        const mergedListenedRaw = cloudWins
+          ? mergeListened(listened, Array.isArray(cloud.listened) ? cloud.listened : [])
+          : mergeListened(Array.isArray(cloud.listened) ? cloud.listened : [], listened);
+        const finalListened = mergedListenedRaw.filter(a => !deletedUnion.includes(a.id));
+
+        const mergedTracks = cloudWins
+          ? mergeKeyed(trackCache, cloud.trackCache)
+          : mergeKeyed(cloud.trackCache, trackCache);
+        const mergedRatings = cloudWins
+          ? mergeKeyed(songRatings, cloud.songRatings)
+          : mergeKeyed(cloud.songRatings, songRatings);
+        const mergedAlbumOrder = cloudWins && Array.isArray(cloud.albumOrder) ? cloud.albumOrder : albumOrder;
+        const mergedSongOrder  = cloudWins && Array.isArray(cloud.songOrder)  ? cloud.songOrder  : songOrder;
+        const mergedSettings = cloudWins && cloud.settings ? cloud.settings : settings;
+        const finalUpdatedAt = Math.max(cloudUpdatedAt, localAt);
+
+        suppressTimestampBump.current = true;
+        setListened(finalListened);
+        setTrackCache(mergedTracks);
+        setSongRatings(mergedRatings);
+        setAlbumOrder(mergedAlbumOrder);
+        setSongOrder(mergedSongOrder);
+        setDeletedListened(deletedUnion);
+        if (mergedSettings) setSettings(mergedSettings);
+        setLocalUpdatedAt(finalUpdatedAt);
+        persist(SK.updatedAt, finalUpdatedAt);
+
+        // If the cloud was behind us (or missing data only we had), push
+        // the reconciled result straight back up now instead of waiting
+        // for the debounce — this is what lets a device that closed mid-
+        // save catch the cloud up on the very next load, instead of
+        // quietly losing whatever didn't make it out in time.
+        if (!cloudWins) {
+          const { error: pushErr } = await supabase.from("app_data").update({
+            data: {
+              listened: finalListened, trackCache: mergedTracks, songRatings: mergedRatings,
+              settings: mergedSettings, albumOrder: mergedAlbumOrder, songOrder: mergedSongOrder,
+              deletedListened: deletedUnion, updatedAt: finalUpdatedAt,
+            },
+          }).eq("id", 8);
+          if (pushErr) console.error("Cloud catch-up save failed:", pushErr);
+        }
+      } finally {
+        setCloudLoaded(true);
       }
-    } finally {
-      setCloudLoaded(true);
     }
-  }
 
-  autoLoad();
-}, []);
+    autoLoad();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-useEffect(() => {
-  if (!cloudLoaded) return; // never save over the cloud before we know what's actually in it
+  // ── DEBOUNCED CLOUD SAVE, WITH AN IMMEDIATE FLUSH ON TAB HIDE/CLOSE ────
+  // A plain debounce alone is exactly what caused the data loss: closing
+  // or backgrounding the tab inside the quiet window meant the timer just
+  // never got to fire. The debounce is kept for normal rating/typing
+  // bursts (so we're not hammering the network on every keystroke), but
+  // the pending save is also flushed immediately the moment the tab is
+  // hidden or the page is about to unload, so a quick close can't outrun it.
+  const pendingPayloadRef = useRef(null);
+  const saveTimerRef = useRef(null);
 
-  const timer = setTimeout(async () => {
-    const payload = {
-      listened,
-      trackCache,
-      songRatings,
-      settings,
-      albumOrder,
-      songOrder,
-      deletedListened,
+  const flushSave = useCallback(() => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    const payload = pendingPayloadRef.current;
+    if (!payload) return;
+    pendingPayloadRef.current = null;
+    supabase.from("app_data").update({ data: payload }).eq("id", 8)
+      .then(({ error }) => { if (error) console.error("Cloud auto-save failed:", error); });
+  }, []);
+
+  useEffect(() => {
+    if (!cloudLoaded) return; // never save over the cloud before we know what's actually in it
+
+    pendingPayloadRef.current = {
+      listened, trackCache, songRatings, settings, albumOrder, songOrder,
+      deletedListened, updatedAt: localUpdatedAt,
     };
 
-    const { error } = await supabase
-      .from("app_data")
-      .update({ data: payload })
-      .eq("id", 8);
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushSave, 1500);
 
-    if (error) console.error("Cloud auto-save failed:", error);
-    else console.log("Auto-saved to cloud");
-  }, 2000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [
+    cloudLoaded, listened, trackCache, songRatings, settings,
+    albumOrder, songOrder, deletedListened, localUpdatedAt, flushSave,
+  ]);
 
-  return () => clearTimeout(timer);
-}, [
-  cloudLoaded,
-  listened,
-  trackCache,
-  songRatings,
-  settings,
-  albumOrder,
-  songOrder,
-  deletedListened,
-]);
+  // Backstop: flush whatever's pending as soon as the tab is hidden/closed
+  // rather than only on a timer. visibilitychange fires reliably on both
+  // mobile (backgrounding) and desktop (closing/switching tabs); pagehide
+  // covers the rest.
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === "hidden") flushSave(); };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", flushSave);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", flushSave);
+    };
+  }, [flushSave]);
 
   const handleImportBackup = (parsed) => {
     if (Array.isArray(parsed.listened)) setListened(parsed.listened);
@@ -2077,42 +2422,42 @@ useEffect(() => {
 
   const handleAdd = async (form) => {
   if (isDuplicateAlbum(form.artist, form.album)) return;
-  const { __collectionId, ...formRest } = form;
-  let cover = formRest.cover?.trim() || null;
-  let tracks = [];
-  if (__collectionId) {
-    // Person confirmed an exact release via search — fetch its tracklist
-    // directly instead of re-running the fuzzy match.
-    tracks = await fetchTracksForCollection(__collectionId);
+
+  // If the person explicitly picked a release from the search results,
+  // trust it completely — no re-guessing, no risk of the classic
+  // "similarly-named album/edition" mismatch. Only fall back to the
+  // best-effort auto lookup (which is itself gated on confidence) when
+  // they skipped the picker entirely.
+  let cover, tracks;
+  if (Array.isArray(form.tracks)) {
+    cover = form.cover?.trim() ? form.cover.trim() : "";
+    tracks = form.tracks;
   } else {
-    const info = await getAlbumInfo(formRest.artist, formRest.album);
-    if (!cover) cover = info.cover;
+    const info = await getAlbumInfo(form.artist, form.album);
+    cover = form.cover?.trim() ? form.cover.trim() : info.cover;
     tracks = info.tracks;
   }
 
   const entry = {
-    ...formRest,
+    artist: form.artist,
+    album: form.album,
+    year: parseInt(form.year) || new Date().getFullYear(),
+    genre: form.genre,
     id: uid(),
-    year: parseInt(formRest.year) || new Date().getFullYear(),
     cover,
   };
 
   setListened(prev => [...prev, { ...entry, rating: null }]);
 
-  if (tracks.length) {
-    const cacheKey = `${formRest.artist}||${formRest.album}`;
-    setTrackCache(prev => {
-      const next = { ...prev, [cacheKey]: tracks };
-      persist(SK.tracks, next);
-      return next;
-    });
+  if (tracks && tracks.length) {
+    const cacheKey = `${form.artist}||${form.album}`;
+    setTrackCache(prev => ({ ...prev, [cacheKey]: tracks }));
   }
 
   setAddModal(null);
 };
 
-  const handleEdit = (formIn, id) => {
-    const { __collectionId, ...form } = formIn;
+  const handleEdit = (form, id) => {
     if (isDuplicateAlbum(form.artist, form.album, id)) return;
     const prevAlbum = listened.find(a => a.id === id);
     const renamed = prevAlbum && (prevAlbum.artist !== form.artist || prevAlbum.album !== form.album);
@@ -2130,9 +2475,7 @@ useEffect(() => {
         if (!(oldKey in prev)) return prev;
         const { [oldKey]: oldTracks, ...rest } = prev;
         const keepExisting = Array.isArray(rest[newKey]) && rest[newKey].length > 0;
-        const next = { ...rest, [newKey]: keepExisting ? rest[newKey] : oldTracks };
-        persist(SK.tracks, next);
-        return next;
+        return { ...rest, [newKey]: keepExisting ? rest[newKey] : oldTracks };
       });
 
       setSongRatings(prev => {
@@ -2147,7 +2490,6 @@ useEffect(() => {
           delete next[k];
           changed = true;
         });
-        if (changed) persist(SK.songRatings, next);
         return changed ? next : prev;
       });
     }
@@ -2160,6 +2502,11 @@ useEffect(() => {
       ? { ...a, criticScore: score, criticScoreSource: source, criticScoreChecked: true }
       : a
     ));
+  };
+
+  // Generic album field patcher, used by the "fix cover/tracklist" flow.
+  const patchAlbum = (id, patch) => {
+    setListened(prev => prev.map(a => a.id === id ? { ...a, ...patch } : a));
   };
 
   // PERMANENT delete — record ID in deletedListened so seed never re-adds it
@@ -2580,7 +2927,8 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
       )}
 
       {/* ══ MODALS ═══════════════════════════════════════════════════════════ */}
-      {detailAlbum && (
+      {detailAlbum && (<>
+<div>{detailAlbum?.cover && <img src={detailAlbum.cover} alt="" style={{maxWidth:220,borderRadius:12,display:"block",margin:"0 auto 12px"}} />}</div>
         <AlbumDetailModal
           album={detailAlbum} onClose={closeDetail}
           trackCache={trackCache} setTrackCache={setTrackCache}
@@ -2588,10 +2936,10 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
           theme={theme}
           onOpenArtist={name => openArtist(name)}
           onSetCriticScore={setCriticScore}
+          onUpdateAlbum={patchAlbum}
           showDebugTools={settings.showCriticDebug !== false}
-          onUpdateAlbumCover={(id, cover) => setListened(prev => prev.map(a => a.id === id ? { ...a, cover } : a))}
         />
-      ) }
+      </>) }
       {!detailAlbum && detailSong && (<>
         <SongDetailModal
           song={detailSong} onClose={closeDetail}
