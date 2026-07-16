@@ -177,6 +177,11 @@ const SK = {
   tracks: "trackcache-v2",
   songRatings: "songratings-v1", settings: "settings-v1",
   albumOrder: "albumorder-v1", songOrder: "songorder-v1",
+  // cover art URLs for songs added directly (singles, or albums not yet
+  // added as a full album entry) — keyed the same way as trackCache,
+  // "artist||album", so a manually-added song's row has art instead of
+  // an empty gap next to songs that came from a real album.
+  songCovers: "songcovers-v1",
   // store set of IDs permanently deleted by the user
   deletedListened: "deleted-listened-v1",
   // timestamp (ms) of the last LOCAL edit, used to decide whether an
@@ -602,6 +607,123 @@ function AlbumFormModal({ initial, onSave, onClose, mode, theme, isDuplicate }) 
           opacity: saving ? 0.7 : 1 }}>
         {saving ? "Saving…" : (mode === "edit" ? "Save changes" : "Add album")}
       </button>
+    </Modal>
+  );
+}
+
+// ─── ADD SONG (from the leaderboard) ────────────────────────────────────────
+function AddSongModal({ onClose, onSave, theme, existingKeys }) {
+  const [song, setSong] = useState("");
+  const [artist, setArtist] = useState("");
+  const [type, setType] = useState("single"); // "single" | "album"
+  const [album, setAlbum] = useState("");
+  const [rating, setRating] = useState("");
+  const [cover, setCover] = useState("");
+  const [error, setError] = useState(null);
+
+  const inputStyle = {
+    width:"100%", background:theme.card, border:`1px solid ${theme.border}`,
+    borderRadius:7, padding:"8px 10px", color:theme.text, fontSize:16,
+    outline:"none", boxSizing:"border-box",
+  };
+
+  const submit = () => {
+    const s = song.trim(), a = artist.trim();
+    if (!s || !a) { setError("Enter both a song title and an artist."); return; }
+    const al = type === "album" ? album.trim() : s;
+    if (type === "album" && !al) { setError("Enter the album title, or switch to Single."); return; }
+    const num = parseFloat(rating);
+    if (isNaN(num) || num < 0 || num > 10) { setError("Enter a rating from 0–10."); return; }
+
+    const isDupe = existingKeys.some(k => {
+      const parts = k.split("||");
+      if (parts.length !== 3) return false;
+      const [ka, kal, ks] = parts;
+      return normalize(ka) === normalize(a) && normalize(kal) === normalize(al) && normalize(ks) === normalize(s);
+    });
+    if (isDupe) { setError("You already have a rating for this song — open it from the leaderboard to edit it instead."); return; }
+
+    onSave({ artist: a, album: al, song: s, rating: Math.round(num * 10) / 10, cover: cover.trim() });
+  };
+
+  return (
+    <Modal onClose={onClose} theme={theme}>
+      <h2 style={{ margin:"0 0 18px", fontSize:16, color:theme.text, fontWeight:700 }}>+ Add song</h2>
+
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Song title</div>
+        <input value={song} onChange={e => { setSong(e.target.value); setError(null); }} style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Artist</div>
+        <input value={artist} onChange={e => { setArtist(e.target.value); setError(null); }} style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom:12 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Is this a single, or is it on an album?</div>
+        <div style={{ display:"flex", gap:8 }}>
+          <button type="button" onClick={() => setType("single")} style={{
+            flex:1, padding:"8px", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13,
+            background: type === "single" ? theme.accent : theme.card,
+            color: type === "single" ? "#fff" : theme.text,
+            border:`1px solid ${type === "single" ? theme.accent : theme.border}`,
+          }}>Single</button>
+          <button type="button" onClick={() => setType("album")} style={{
+            flex:1, padding:"8px", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13,
+            background: type === "album" ? theme.accent : theme.card,
+            color: type === "album" ? "#fff" : theme.text,
+            border:`1px solid ${type === "album" ? theme.accent : theme.border}`,
+          }}>On an album</button>
+        </div>
+      </div>
+
+      {type === "album" && (
+        <div style={{ marginBottom:12 }}>
+          <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Album title</div>
+          <input value={album} onChange={e => { setAlbum(e.target.value); setError(null); }}
+            placeholder="e.g. Renaissance" style={inputStyle} />
+          <p style={{ fontSize:11, color:theme.muted, margin:"6px 0 0", lineHeight:1.5 }}>
+            If you add this album later under the same artist &amp; title, this rating will be picked up
+            automatically instead of creating a duplicate.
+          </p>
+        </div>
+      )}
+
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:6 }}>Your rating</div>
+        <input type="number" min="0" max="10" step="0.1" value={rating}
+          onChange={e => { setRating(e.target.value); setError(null); }}
+          placeholder="0–10" style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom:14 }}>
+        <div style={{ fontSize:13, color:theme.muted, marginBottom:4 }}>Cover URL (optional)</div>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {cover.trim() && (
+            <img src={cover.trim()} alt="" onError={e => { e.currentTarget.style.display = "none"; }}
+              style={{ width:38, height:38, borderRadius:6, objectFit:"cover", flexShrink:0, background:theme.surface }} />
+          )}
+          <input value={cover} onChange={e => setCover(e.target.value)}
+            placeholder="https://…" style={inputStyle} />
+        </div>
+        <p style={{ fontSize:11, color:theme.muted, margin:"6px 0 0", lineHeight:1.5 }}>
+          Adds a bit of art so this song doesn't look out of place next to songs from an album.
+        </p>
+      </div>
+
+      {error && (
+        <div style={{
+          color:"#f87171", fontSize:12, margin:"0 0 14px",
+          background:"#f8717118", border:"1px solid #f8717133",
+          borderRadius:8, padding:"10px 12px", lineHeight:1.5,
+        }}>{error}</div>
+      )}
+
+      <button onClick={submit} style={{
+        width:"100%", padding:"10px", background:theme.accent, border:"none",
+        borderRadius:8, color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer",
+      }}>Add song</button>
     </Modal>
   );
 }
@@ -1120,7 +1242,7 @@ function AlbumDetailModal({ album, onClose, trackCache, setTrackCache, songRatin
 }
 
 // ─── ARTIST DETAIL MODAL ─────────────────────────────────────────────────────
-function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings, theme, onClose, onOpenAlbum, albumOrder, setAlbumOrder, songOrder, setSongOrder }) {
+function ArtistDetailModal({ artist, listened, trackCache, songRatings, songCovers, settings, theme, onClose, onOpenAlbum, albumOrder, setAlbumOrder, songOrder, setSongOrder }) {
   const listenedAlbums = listened.filter(a => a.artist === artist);
 
   const effectiveRating = a => {
@@ -1175,7 +1297,19 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
   const artistAvg = ratedVals.length ? (ratedVals.reduce((x, y) => x + y, 0) / ratedVals.length) : null;
   const avgRc = ratingColor(artistAvg);
 
-  const cover = listenedAlbums.find(a => a.cover)?.cover;
+  // Compare my total rating points to critics' total, across whichever of
+  // this artist's albums I've both rated AND have a critic score for —
+  // straight sums rather than averages, so it scales with how many
+  // albums you've actually rated instead of hiding that behind an average.
+  const albumsWithCritic = listenedAlbums.filter(a => a.rating != null && a.criticScore != null);
+  const myTotal = albumsWithCritic.reduce((s, a) => s + a.rating, 0);
+  const criticTotal = albumsWithCritic.reduce((s, a) => s + a.criticScore / 10, 0);
+  const vsCriticsDiff = albumsWithCritic.length
+    ? Math.round((myTotal - criticTotal) * 10) / 10
+    : null;
+
+  const cover = listenedAlbums.find(a => a.cover)?.cover
+    || Object.entries(songCovers || {}).find(([k]) => k.startsWith(artist + "||"))?.[1];
 
   // Full rating-sorted + tie-ordered list of every rated song across ALL
   // artists (mirrors the Song Leaderboard tab, minus its UI filters), used
@@ -1222,6 +1356,21 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, settings
           </div>
         )}
       </div>
+
+      {albumsWithCritic.length > 0 && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:18, flexWrap:"wrap" }}>
+          <span style={{ fontSize:12, color:theme.muted }}>
+            vs critics ({albumsWithCritic.length} album{albumsWithCritic.length !== 1 ? "s" : ""}) — {myTotal.toFixed(1)} you vs {criticTotal.toFixed(1)} critics
+          </span>
+          <span style={{
+            fontSize:13, fontWeight:800, padding:"2px 8px", borderRadius:7,
+            color: vsCriticsDiff >= 0 ? "#22c55e" : "#f87171",
+            background: vsCriticsDiff >= 0 ? "#22c55e1e" : "#f871711e",
+          }}>
+            {vsCriticsDiff > 0 ? `+${vsCriticsDiff.toFixed(1)}` : vsCriticsDiff.toFixed(1)}
+          </span>
+        </div>
+      )}
 
       {sortedListened.length > 0 && (
         <div style={{ marginBottom:22 }}>
@@ -2164,6 +2313,7 @@ export default function App() {
   const [listened, setListened] = useState(() => mergeWithSeed(SEED_LISTENED, loadLS(SK.listened, null), loadLS(SK.deletedListened, [])));
   const [trackCache, setTrackCache] = useState(() => loadLS(SK.tracks, {}));
   const [songRatings, setSongRatings] = useState(() => loadLS(SK.songRatings, {}));
+  const [songCovers, setSongCovers] = useState(() => loadLS(SK.songCovers, {}));
   const [albumOrder, setAlbumOrder] = useState(() => loadLS(SK.albumOrder, []));
   const [songOrder, setSongOrder]   = useState(() => loadLS(SK.songOrder, []));
 
@@ -2178,6 +2328,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   const [editRatingVal, setEditRatingVal] = useState("");
 
   const [addModal, setAddModal]         = useState(null);
+  const [addSongModal, setAddSongModal] = useState(false);
   const [editModal, setEditModal]       = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -2198,6 +2349,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   useEffect(() => { persist(SK.listened, listened); }, [listened]);
   useEffect(() => { persist(SK.tracks, trackCache); }, [trackCache]);
   useEffect(() => { persist(SK.songRatings, songRatings); }, [songRatings]);
+  useEffect(() => { persist(SK.songCovers, songCovers); }, [songCovers]);
   useEffect(() => { persist(SK.albumOrder, albumOrder); }, [albumOrder]);
   useEffect(() => { persist(SK.songOrder, songOrder); }, [songOrder]);
   useEffect(() => { persist(SK.deletedListened, deletedListened); }, [deletedListened]);
@@ -2229,6 +2381,8 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   trackCacheRef.current = trackCache;
   const songRatingsRef = useRef(songRatings);
   songRatingsRef.current = songRatings;
+  const songCoversRef = useRef(songCovers);
+  songCoversRef.current = songCovers;
   const albumOrderRef = useRef(albumOrder);
   albumOrderRef.current = albumOrder;
   const songOrderRef = useRef(songOrder);
@@ -2251,7 +2405,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     setLocalUpdatedAt(now);
     persist(SK.updatedAt, now);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listened, trackCache, songRatings, albumOrder, songOrder, deletedListened]);
+  }, [listened, trackCache, songRatings, songCovers, albumOrder, songOrder, deletedListened]);
 
   // Guards the very first render(s): the initial state is whatever's in
   // localStorage/seed data, loaded synchronously before the cloud fetch
@@ -2302,6 +2456,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
         const currentListened = listenedRef.current;
         const currentTrackCache = trackCacheRef.current;
         const currentSongRatings = songRatingsRef.current;
+        const currentSongCovers = songCoversRef.current;
         const currentAlbumOrder = albumOrderRef.current;
         const currentSongOrder = songOrderRef.current;
         const currentDeletedListened = deletedListenedRef.current;
@@ -2323,6 +2478,9 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
         const mergedRatings = cloudWins
           ? mergeKeyed(currentSongRatings, cloud.songRatings)
           : mergeKeyed(cloud.songRatings, currentSongRatings);
+        const mergedSongCovers = cloudWins
+          ? mergeKeyed(currentSongCovers, cloud.songCovers)
+          : mergeKeyed(cloud.songCovers, currentSongCovers);
         const mergedAlbumOrder = cloudWins && Array.isArray(cloud.albumOrder) ? cloud.albumOrder : currentAlbumOrder;
         const mergedSongOrder  = cloudWins && Array.isArray(cloud.songOrder)  ? cloud.songOrder  : currentSongOrder;
         const mergedSettings = cloudWins && cloud.settings ? cloud.settings : currentSettings;
@@ -2332,6 +2490,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
         setListened(finalListened);
         setTrackCache(mergedTracks);
         setSongRatings(mergedRatings);
+        setSongCovers(mergedSongCovers);
         setAlbumOrder(mergedAlbumOrder);
         setSongOrder(mergedSongOrder);
         setDeletedListened(deletedUnion);
@@ -2348,6 +2507,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
           const { error: pushErr } = await supabase.from("app_data").update({
             data: {
               listened: finalListened, trackCache: mergedTracks, songRatings: mergedRatings,
+              songCovers: mergedSongCovers,
               settings: mergedSettings, albumOrder: mergedAlbumOrder, songOrder: mergedSongOrder,
               deletedListened: deletedUnion, updatedAt: finalUpdatedAt,
             },
@@ -2386,7 +2546,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     if (!cloudLoaded) return; // never save over the cloud before we know what's actually in it
 
     pendingPayloadRef.current = {
-      listened, trackCache, songRatings, settings, albumOrder, songOrder,
+      listened, trackCache, songRatings, songCovers, settings, albumOrder, songOrder,
       deletedListened, updatedAt: localUpdatedAt,
     };
 
@@ -2395,7 +2555,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
 
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [
-    cloudLoaded, listened, trackCache, songRatings, settings,
+    cloudLoaded, listened, trackCache, songRatings, songCovers, settings,
     albumOrder, songOrder, deletedListened, localUpdatedAt, flushSave,
   ]);
 
@@ -2417,6 +2577,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     if (Array.isArray(parsed.listened)) setListened(parsed.listened);
     if (parsed.trackCache) setTrackCache(parsed.trackCache);
     if (parsed.songRatings) setSongRatings(parsed.songRatings);
+    if (parsed.songCovers) setSongCovers(parsed.songCovers);
     if (parsed.settings) setSettings(parsed.settings);
     if (Array.isArray(parsed.albumOrder)) setAlbumOrder(parsed.albumOrder);
     if (Array.isArray(parsed.songOrder)) setSongOrder(parsed.songOrder);
@@ -2482,10 +2643,46 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
   if (tracks && tracks.length) {
     const cacheKey = `${form.artist}||${form.album}`;
     setTrackCache(prev => ({ ...prev, [cacheKey]: tracks }));
+
+    // If songs were pre-rated from the Song Leaderboard as "on this album"
+    // before the album itself existed here, adopt those ratings under the
+    // album's exact artist||album||track key instead of leaving them
+    // orphaned under whatever casing/spacing was typed at the time — this
+    // is what stops the same song from ending up rated twice.
+    const na = normalize(form.artist), nal = normalize(form.album);
+    setSongRatings(prev => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(prev).forEach(k => {
+        const parts = k.split("||");
+        if (parts.length !== 3) return;
+        const [ka, kal, ks] = parts;
+        if (normalize(ka) !== na || normalize(kal) !== nal) return;
+        const match = tracks.find(t => normalize(t) === normalize(ks));
+        if (!match) return;
+        const exactKey = `${form.artist}||${form.album}||${match}`;
+        if (exactKey === k) return;
+        if (next[exactKey] == null) {
+          next[exactKey] = next[k];
+          delete next[k];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
   }
 
   setAddModal(null);
 };
+
+  const handleAddSong = ({ artist, album, song, rating, cover }) => {
+    const key = `${artist}||${album}`;
+    setSongRatings(prev => ({ ...prev, [key + "||" + song]: rating }));
+    if (cover) {
+      setSongCovers(prev => (prev[key] ? prev : { ...prev, [key]: cover }));
+    }
+    setAddSongModal(false);
+  };
 
   const handleEdit = (form, id) => {
     if (isDuplicateAlbum(form.artist, form.album, id)) return;
@@ -2858,8 +3055,12 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
 {Array.from({length:10},(_,i)=><option key={i} value={i}>{i===9?"9-10":`${i}-${i}.9`}</option>)}
 </select>
 </div>
+          <button onClick={() => setAddSongModal(true)} style={{
+            padding:"9px", marginBottom:12, width:"100%", background:theme.surface, border:`1px dashed ${theme.border}`,
+            borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
+          }}>+ Add song</button>
           <p style={{ margin:"0 0 14px", fontSize:12, color:theme.muted }}>
-            Rate individual songs inside an album's tracklist to build your leaderboard.
+            Rate individual songs inside an album's tracklist, or add one directly above, to build your leaderboard.
             {top50.length > 0 && ` Showing ${top50.length} rated song${top50.length!==1?"s":""}.`}
             {top50.length > 1 && " Use ▲▼ to reorder songs with the same rating."}
           </p>
@@ -2881,6 +3082,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
 .map((s, i) => {
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album);
+              const rowCover = albumObj?.cover || songCovers[s.artist + "||" + s.album];
               const c = albumObj ? GENRES[albumObj.genre]?.color || "#888" : "#888";
               const canReorderSong = hasTieGroup(top50, i);
               const canUp   = canReorderSong;
@@ -2900,9 +3102,9 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
   onDown={() => moveSongInTieGroup(s, 1)}
   theme={theme} />
 
-{albumObj?.cover && (
+{rowCover && (
   <img
-    src={albumObj.cover}
+    src={rowCover}
     alt={s.album}
     style={{
       width:coverSize,
@@ -2982,7 +3184,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
         <ArtistDetailModal
           artist={detailArtist} onClose={closeDetail}
           listened={listened}
-          trackCache={trackCache} songRatings={songRatings}
+          trackCache={trackCache} songRatings={songRatings} songCovers={songCovers}
           settings={settings} theme={theme}
           onOpenAlbum={(album) => openAlbum(album)}
           albumOrder={albumOrder} setAlbumOrder={setAlbumOrder}
@@ -2993,6 +3195,10 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
         <AlbumFormModal mode="add" onSave={form => handleAdd(form)}
           isDuplicate={(artist, album) => isDuplicateAlbum(artist, album)}
           onClose={() => setAddModal(null)} theme={theme} />
+      )}
+      {addSongModal && (
+        <AddSongModal onSave={handleAddSong} onClose={() => setAddSongModal(false)}
+          existingKeys={Object.keys(songRatings)} theme={theme} />
       )}
       {editModal && (
         <AlbumFormModal mode="edit" initial={editModal.album}
@@ -3012,7 +3218,7 @@ return searchOk&&artistOk&&genreOk&&ratingOk;
       {showSettings && (
         <SettingsModal settings={settings} setSettings={setSettings}
           onClose={() => setShowSettings(false)} theme={theme}
-          backupData={{ listened, trackCache, songRatings, settings, albumOrder, songOrder, deletedListened }}
+          backupData={{ listened, trackCache, songRatings, songCovers, settings, albumOrder, songOrder, deletedListened }}
           onImportBackup={handleImportBackup}
         />
       )}
