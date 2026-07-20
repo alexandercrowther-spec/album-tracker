@@ -2868,7 +2868,14 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     items: visibleListened,
     keyOf: a => a.id,
     groupOf: a => a.__rating,
-    onDrop: (key, finalOrderKeys) => setAlbumOrder(finalOrderKeys),
+    onDrop: (key, finalOrderKeys) => {
+      // IMPORTANT: finalOrderKeys only covers the currently visible/filtered
+      // albums. Writing it straight into albumOrder would silently discard
+      // the saved position of every album outside the current filter/search
+      // — mergeScopedOrder instead folds the reordered subset back into the
+      // full, unfiltered order and leaves everything else untouched.
+      setAlbumOrder(mergeScopedOrder(sortListened(listened), a => a.id, () => true, finalOrderKeys));
+    },
   });
 
   const top50Base = Object.entries(songRatings)
