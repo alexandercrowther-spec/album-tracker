@@ -273,46 +273,6 @@ function hasTieGroup(sorted, idx) {
   return end > start;
 }
 
-function reorderWithinTieGroup(sorted, order, keyOf, key, dir) {
-  const idx = sorted.findIndex(item => keyOf(item) === key);
-  if (idx < 0) return order;
-  const [start, end] = tieGroupBounds(sorted, idx);
-  if (start === end) return order; // not tied with anything, nothing to do
-
-  const newOrderKeys = sorted.map(keyOf);
-  const swapIdx = idx + dir;
-
-  if (swapIdx >= start && swapIdx <= end) {
-    // Still inside the tie group — plain adjacent swap, so repeated clicks
-    // walk the item through the tied entries one at a time (10 -> 11 -> 12...).
-    const a = newOrderKeys[idx], b = newOrderKeys[swapIdx];
-    newOrderKeys[idx] = b; newOrderKeys[swapIdx] = a;
-    return newOrderKeys;
-  }
-
-  // Hit the edge of the tie group (no more tied entries in this direction)
-  // — wrap around to the opposite end of the group instead of doing nothing,
-  // so an item pushed all the way down cycles back to where it started.
-  const [item] = newOrderKeys.splice(idx, 1);
-  const insertAt = dir > 0 ? start : end;
-  newOrderKeys.splice(insertAt, 0, item);
-  return newOrderKeys;
-}
-
-// Reorders `key` within the subset of `fullSorted` matched by `scopeFilter`
-// (e.g. one artist's albums/songs), so tie-groups are local to that subset,
-// then merges the result back into the full ordering — every id outside the
-// scope keeps its exact existing position. Used by the artist page so ties
-// cascade/wrap through just that artist's own entries rather than the
-// whole app-wide list.
-function reorderScoped(fullSorted, keyOf, scopeFilter, key, dir) {
-  const scoped = fullSorted.filter(scopeFilter);
-  const newScopedKeys = reorderWithinTieGroup(scoped, scoped.map(keyOf), keyOf, key, dir);
-  const scopedKeySet = new Set(scoped.map(keyOf));
-  let si = 0;
-  return fullSorted.map(keyOf).map(k => scopedKeySet.has(k) ? newScopedKeys[si++] : k);
-}
-
 // ─── SHARED UI ───────────────────────────────────────────────────────────────
 function Modal({ onClose, children, theme, wide }) {
   useEffect(() => {
@@ -369,18 +329,108 @@ function FilterBar({ items, active, onSelect, field="genre", extra }) {
   );
 }
 
-function ReorderArrows({ canUp, canDown, onUp, onDown, theme }) {
-  if (!canUp && !canDown) return null;
+// Merges a new ordering for a subset ("scope", e.g. one artist's albums/songs)
+// back into the full key order — every id outside the scope keeps its exact
+// existing position. `newScopedKeys` must be a permutation of exactly the
+// keys that belong to the scope (it may be a prefix of the scope, e.g. only
+// the visible top 10 — items further down the scope simply keep their spot).
+function mergeScopedOrder(fullSorted, keyOf, scopeFilter, newScopedKeys) {
+  const scopedKeySet = new Set(newScopedKeys);
+  let si = 0;
+  return fullSorted.map(keyOf).map(k => scopedKeySet.has(k) ? newScopedKeys[si++] : k);
+}
+
+// ─── DRAG TO REORDER ───────────────────────────────────────────────────────
+// Pointer-based drag-and-drop reordering (mouse + touch alike, since it's
+// built on the Pointer Events API rather than HTML5 drag-and-drop, which
+// touch browsers don't support). Movement is constrained to items sharing
+// the same group (e.g. the same rating), mirroring the old tie-group rule.
+function useDragReorder({ enabled, items, keyOf, groupOf, onDrop }) {
+  const [dragKey, setDragKey] = useState(null);
+  const [liveOrder, setLiveOrder] = useState(null); // key array, only while dragging
+  const rowRefs = useRef(new Map());
+  const groupRef = useRef(null);
+  const itemsRef = useRef(items);
+  useEffect(() => { itemsRef.current = items; });
+
+  const displayItems = liveOrder
+    ? liveOrder.map(k => items.find(it => keyOf(it) === k)).filter(Boolean)
+    : items;
+
+  const setRowRef = key => el => {
+    if (el) rowRefs.current.set(key, el);
+    else rowRefs.current.delete(key);
+  };
+
+  const startDrag = item => e => {
+    if (!enabled) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const key = keyOf(item);
+    groupRef.current = groupOf(item);
+    setDragKey(key);
+    setLiveOrder(itemsRef.current.map(keyOf));
+
+    const handleMove = ev => {
+      const y = ev.clientY;
+      setLiveOrder(prev => {
+        if (!prev) return prev;
+        const curIdx = prev.indexOf(key);
+        let hoveredIdx = curIdx;
+        let bestDist = Infinity;
+        prev.forEach((k, idx) => {
+          const it = itemsRef.current.find(o => keyOf(o) === k);
+          if (!it || groupOf(it) !== groupRef.current) return;
+          const el = rowRefs.current.get(k);
+          if (!el) return;
+          const rect = el.getBoundingClientRect();
+          const dist = Math.abs((rect.top + rect.height / 2) - y);
+          if (dist < bestDist) { bestDist = dist; hoveredIdx = idx; }
+        });
+        if (hoveredIdx === curIdx) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(curIdx, 1);
+        next.splice(hoveredIdx, 0, moved);
+        return next;
+      });
+    };
+
+    const endDrag = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", endDrag);
+      setDragKey(null);
+      setLiveOrder(finalOrder => {
+        if (finalOrder) onDrop(key, finalOrder);
+        return null;
+      });
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", endDrag);
+  };
+
+  return { displayItems, dragKey, setRowRef, startDrag };
+}
+
+function DragHandle({ canDrag, dragging, onPointerDown, theme }) {
+  if (!canDrag) return <div style={{ width:14, flexShrink:0 }} />;
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:1, flexShrink:0 }}>
-      <button onClick={onUp} disabled={!canUp} title="Move up (same rating)" style={{
-        background:"none", border:"none", cursor: canUp ? "pointer" : "default",
-        color: canUp ? theme.muted : theme.border, fontSize:11, padding:"0 2px", lineHeight:1,
-      }}>▲</button>
-      <button onClick={onDown} disabled={!canDown} title="Move down (same rating)" style={{
-        background:"none", border:"none", cursor: canDown ? "pointer" : "default",
-        color: canDown ? theme.muted : theme.border, fontSize:11, padding:"0 2px", lineHeight:1,
-      }}>▼</button>
+    <div
+      onPointerDown={onPointerDown}
+      title="Drag to reorder (same rating)"
+      style={{
+        width:14, flexShrink:0, display:"flex", alignItems:"center", justifyContent:"center",
+        cursor: dragging ? "grabbing" : "grab", touchAction:"none", userSelect:"none",
+        color: theme.muted, opacity: dragging ? 1 : 0.75,
+      }}
+    >
+      <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+        <circle cx="2.5" cy="2.5" r="1.4" /><circle cx="7.5" cy="2.5" r="1.4" />
+        <circle cx="2.5" cy="8" r="1.4" /><circle cx="7.5" cy="8" r="1.4" />
+        <circle cx="2.5" cy="13.5" r="1.4" /><circle cx="7.5" cy="13.5" r="1.4" />
+      </svg>
     </div>
   );
 }
@@ -1288,10 +1338,15 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, songCove
         return br - ar;
       });
 
-  const moveAlbumInTieGroup = (album, dir) => {
-    if (!canReorderAlbums) return;
-    setAlbumOrder(() => reorderScoped(globalSortedAlbums, a => a.id, a => a.artist === artist, album.id, dir));
-  };
+  const albumDrag = useDragReorder({
+    enabled: canReorderAlbums,
+    items: sortedListened,
+    keyOf: a => a.id,
+    groupOf: a => a.rating,
+    onDrop: (key, finalOrderKeys) => {
+      setAlbumOrder(mergeScopedOrder(globalSortedAlbums, a => a.id, a => a.artist === artist, finalOrderKeys));
+    },
+  });
 
   const ratedVals = sortedListened.map(effectiveRating).filter(v => v != null);
   const artistAvg = ratedVals.length ? (ratedVals.reduce((x, y) => x + y, 0) / ratedVals.length) : null;
@@ -1328,9 +1383,15 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, songCove
   const artistScopedSongs = allSongsOrdered.filter(s => s.artist === artist);
   const topSongs = artistScopedSongs.slice(0, 10);
 
-  const moveSongInTieGroup = (song, dir) => {
-    setSongOrder(() => reorderScoped(allSongsOrdered, s => s.key, s => s.artist === artist, song.key, dir));
-  };
+  const songDrag = useDragReorder({
+    enabled: true,
+    items: topSongs,
+    keyOf: s => s.key,
+    groupOf: s => s.rating,
+    onDrop: (key, finalOrderKeys) => {
+      setSongOrder(mergeScopedOrder(allSongsOrdered, s => s.key, s => s.artist === artist, finalOrderKeys));
+    },
+  });
 
   return (
     <Modal onClose={onClose} theme={theme} wide>
@@ -1378,23 +1439,24 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, songCove
             Albums heard
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {sortedListened.map((a, i) => {
+            {albumDrag.displayItems.map((a, i) => {
               const c = GENRES[a.genre]?.color || "#888";
               const rating = effectiveRating(a);
               const rc = ratingColor(rating);
-              const canReorderRow = canReorderAlbums && rating != null && hasTieGroup(artistScopedAlbums, i);
+              const canReorderRow = canReorderAlbums && rating != null && hasTieGroup(albumDrag.displayItems, i);
+              const dragging = albumDrag.dragKey === a.id;
               return (
-                <div key={a.id} style={{
+                <div key={a.id} ref={albumDrag.setRowRef(a.id)} style={{
                   display:"flex", alignItems:"center", gap:10, padding:"8px 10px",
                   background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
+                  opacity: dragging ? 0.6 : 1, boxShadow: dragging ? "0 4px 12px rgba(0,0,0,.35)" : "none",
                 }}>
                   <div style={{ width:20, textAlign:"right", fontSize:11, color: rating!=null ? theme.muted : theme.border, fontWeight:700, flexShrink:0 }}>
                     {rating != null ? i + 1 : "—"}
                   </div>
-                  <ReorderArrows
-                    canUp={canReorderRow} canDown={canReorderRow}
-                    onUp={() => moveAlbumInTieGroup(a, -1)}
-                    onDown={() => moveAlbumInTieGroup(a, 1)}
+                  <DragHandle
+                    canDrag={canReorderRow} dragging={dragging}
+                    onPointerDown={albumDrag.startDrag(a)}
                     theme={theme}
                   />
                   <div onClick={() => onOpenAlbum(a)} style={{ display:"flex", alignItems:"center", gap:10, flex:1, minWidth:0, cursor:"pointer" }}>
@@ -1430,19 +1492,20 @@ function ArtistDetailModal({ artist, listened, trackCache, songRatings, songCove
             Top rated songs
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {topSongs.map((s, i) => {
+            {songDrag.displayItems.map((s, i) => {
               const rc = ratingColor(s.rating);
-              const canReorderSongRow = hasTieGroup(artistScopedSongs, i);
+              const canReorderSongRow = hasTieGroup(songDrag.displayItems, i);
+              const dragging = songDrag.dragKey === s.key;
               return (
-                <div key={s.key} style={{
+                <div key={s.key} ref={songDrag.setRowRef(s.key)} style={{
                   display:"flex", alignItems:"center", gap:10, padding:"7px 10px",
                   background:theme.card, borderRadius:8, border:`1px solid ${theme.border}`,
+                  opacity: dragging ? 0.6 : 1, boxShadow: dragging ? "0 4px 12px rgba(0,0,0,.35)" : "none",
                 }}>
                   <div style={{ width:16, textAlign:"right", fontSize:11, color:theme.muted, fontWeight:700, flexShrink:0 }}>{i + 1}</div>
-                  <ReorderArrows
-                    canUp={canReorderSongRow} canDown={canReorderSongRow}
-                    onUp={() => moveSongInTieGroup(s, -1)}
-                    onDown={() => moveSongInTieGroup(s, 1)}
+                  <DragHandle
+                    canDrag={canReorderSongRow} dragging={dragging}
+                    onPointerDown={songDrag.startDrag(s)}
                     theme={theme}
                   />
                   <div style={{ flex:1, minWidth:0 }}>
@@ -2800,10 +2863,13 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     ));
   }
 
-  const moveAlbumInTieGroup = (album, dir) => {
-    if(settings.listenSort!=="rating") return;
-    setAlbumOrder(prev => reorderWithinTieGroup(visibleListened, prev, a => a.id, album.id, dir));
-  };
+  const albumDrag = useDragReorder({
+    enabled: settings.listenSort==="rating",
+    items: visibleListened,
+    keyOf: a => a.id,
+    groupOf: a => a.__rating,
+    onDrop: (key, finalOrderKeys) => setAlbumOrder(finalOrderKeys),
+  });
 
   const top50Base = Object.entries(songRatings)
     .filter(([,r]) => r != null)
@@ -2817,9 +2883,24 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
     .sort((a,b)=>b.rating-a.rating);
   const top50 = applyTieOrder(top50Base, songOrder, s => s.key);
 
-  const moveSongInTieGroup = (song, dir) => {
-    setSongOrder(prev => reorderWithinTieGroup(top50, prev, s => s.key, song.key, dir));
-  };
+  const visibleTop50 = top50.filter(s=>{
+    const searchOk=`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase());
+    const artistOk=top50Artist==="all"||s.artist===top50Artist;
+    const genreOk=top50Genre==="all"||(listened.find(a=>a.artist===s.artist&&a.album===s.album)?.genre===top50Genre);
+    const ratingOk=top50RatingRange==="all"||(top50RatingRange==="9"?s.rating>=9:(s.rating>=Number(top50RatingRange)&&s.rating<Number(top50RatingRange)+1));
+    return searchOk&&artistOk&&genreOk&&ratingOk;
+  });
+  const visibleTop50KeySet = new Set(visibleTop50.map(s => s.key));
+
+  const songDrag = useDragReorder({
+    enabled: true,
+    items: visibleTop50,
+    keyOf: s => s.key,
+    groupOf: s => s.__rating,
+    onDrop: (key, finalOrderKeys) => {
+      setSongOrder(mergeScopedOrder(top50, s => s.key, s => visibleTop50KeySet.has(s.key), finalOrderKeys));
+    },
+  });
 
   const ratedCount = listened.filter(a => a.rating!=null).length;
   const avg = ratedCount ? (listened.filter(a=>a.rating!=null).reduce((s,a)=>s+a.rating,0)/ratedCount).toFixed(1) : null;
@@ -2870,18 +2951,16 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
               borderRadius:9, color:theme.muted, cursor:"pointer", fontSize:12, textAlign:"left",
             }}>+ Add album</button>
             <p style={{ fontSize:11, color:theme.border, margin:"2px 0 4px" }}>
-              Tap a rating to edit · tap title for tracklist
-              {settings.listenSort==="rating" && " · ▲▼ reorders ties"}
+              Tap a rating to edit · drag ⠿ to reorder ties
             </p>
-           {visibleListened.map((a, i) => {
+           {albumDrag.displayItems.map((a, i) => {
   const c = GENRES[a.genre]?.color || "#888";
   const rawVals=(trackCache[a.artist+"||"+a.album]||[]).map(ss=>songRatings[a.artist+"||"+a.album+"||"+ss]).filter(v=>v!=null); const rawAvg=rawVals.length?rawVals.reduce((x,y)=>x+y,0)/rawVals.length:null; const rc = ratingColor(settings.listenSort==="raw"?rawAvg:a.rating);
   const isEditing = editRatingId === a.id;
-  const canReorder = settings.listenSort==="rating" && a.rating!=null && hasTieGroup(visibleListened, i);
-  const canUp   = canReorder;
-  const canDown = canReorder;
+  const canReorder = settings.listenSort==="rating" && a.rating!=null && hasTieGroup(albumDrag.displayItems, i);
+  const dragging = albumDrag.dragKey === a.id;
   return (
-    <div key={a.id} style={{
+    <div key={a.id} ref={albumDrag.setRowRef(a.id)} style={{
       display:"flex",
       alignItems:"center",
       gap:rowGap,
@@ -2889,6 +2968,8 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
       background:theme.card,
       borderRadius:9,
       border:`1px solid ${theme.border}`,
+      opacity: dragging ? 0.6 : 1,
+      boxShadow: dragging ? "0 4px 12px rgba(0,0,0,.35)" : "none",
     }}>
       <div style={{
         width:isMobile?16:22,
@@ -2901,11 +2982,10 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
         {(settings.listenSort==="raw" ? rawAvg!=null : a.rating!=null) ? i+1 : "—"}
       </div>
 
-      <ReorderArrows
-        canUp={canUp}
-        canDown={canDown}
-        onUp={() => moveAlbumInTieGroup(a, -1)}
-        onDown={() => moveAlbumInTieGroup(a, 1)}
+      <DragHandle
+        canDrag={canReorder}
+        dragging={dragging}
+        onPointerDown={albumDrag.startDrag(a)}
         theme={theme}
       />
 
@@ -3062,7 +3142,7 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
           <p style={{ margin:"0 0 14px", fontSize:12, color:theme.muted }}>
             Rate individual songs inside an album's tracklist, or add one directly above, to build your leaderboard.
             {top50.length > 0 && ` Showing ${top50.length} rated song${top50.length!==1?"s":""}.`}
-            {top50.length > 1 && " Use ▲▼ to reorder songs with the same rating."}
+            {top50.length > 1 && " Drag ⠿ to reorder songs with the same rating."}
           </p>
           {top50.length === 0 && (
             <div style={{ textAlign:"center", padding:"48px 0", color:theme.muted }}>
@@ -3072,35 +3152,29 @@ const [top50RatingRange,setTop50RatingRange]=useState("all");
             </div>
           )}
           <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-            {top50.filter(s=>{
-const searchOk=`${s.song} ${s.artist} ${s.album}`.toLowerCase().includes(searchTop50.toLowerCase());
-const artistOk=top50Artist==="all"||s.artist===top50Artist;
-const genreOk=top50Genre==="all"||(listened.find(a=>a.artist===s.artist&&a.album===s.album)?.genre===top50Genre);
-const ratingOk=top50RatingRange==="all"||(top50RatingRange==="9"?s.rating>=9:(s.rating>=Number(top50RatingRange)&&s.rating<Number(top50RatingRange)+1));
-return searchOk&&artistOk&&genreOk&&ratingOk;
-})
-.map((s, i) => {
+            {songDrag.displayItems.map((s, i) => {
               const rc = ratingColor(s.rating);
               const albumObj = listened.find(a => a.artist===s.artist && a.album===s.album);
               const rowCover = albumObj?.cover || songCovers[s.artist + "||" + s.album];
               const c = albumObj ? GENRES[albumObj.genre]?.color || "#888" : "#888";
-              const canReorderSong = hasTieGroup(top50, i);
-              const canUp   = canReorderSong;
-              const canDown = canReorderSong;
+              const canReorderSong = hasTieGroup(songDrag.displayItems, i);
+              const dragging = songDrag.dragKey === s.key;
               return (
-                <div key={s.key} style={{
+                <div key={s.key} ref={songDrag.setRowRef(s.key)} style={{
                   display:"flex", alignItems:"center", gap:isMobile?6:10, padding:pad,
                   background:theme.card, borderRadius:9, border:`1px solid ${theme.border}`,
+                  opacity: dragging ? 0.6 : 1, boxShadow: dragging ? "0 4px 12px rgba(0,0,0,.35)" : "none",
                 }}>
                   <div style={{ width:isMobile?20:26, textAlign:"right", fontSize:i<3?16:12,
                     color: i===0?"#fbbf24":i===1?"#94a3b8":i===2?"#b45309":theme.muted,
                     fontWeight:800, flexShrink:0 }}>
                     {i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}
                   </div>
-                  <ReorderArrows canUp={canUp} canDown={canDown}
-  onUp={() => moveSongInTieGroup(s, -1)}
-  onDown={() => moveSongInTieGroup(s, 1)}
-  theme={theme} />
+                  <DragHandle
+                    canDrag={canReorderSong} dragging={dragging}
+                    onPointerDown={songDrag.startDrag(s)}
+                    theme={theme}
+                  />
 
 {rowCover && (
   <img
